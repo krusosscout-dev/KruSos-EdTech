@@ -1,2 +1,2 @@
-﻿import kruSauceLogo from './kru-sauce-logo.jpg';
+import kruSauceLogo from './kru-sauce-logo.png';
 export default kruSauceLogo;

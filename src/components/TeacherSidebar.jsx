@@ -79,24 +79,30 @@ export const TeacherSidebar = ({
           mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
         }`}
       >
-        {/* Sidebar Header: School Logo & System Brand */}
-        <div className="p-4 border-b border-slate-800 flex items-center justify-between gap-3">
+        {/* Sidebar Header: Single Unified Profile & School Brand (ไม่ซ้ำซ้อน) */}
+        <div className="p-3.5 border-b border-slate-800 flex items-center justify-between gap-2.5">
           <div className={`flex items-center gap-3 min-w-0 ${collapsed ? 'mx-auto' : ''}`}>
-            <div className="w-10 h-10 rounded-2xl p-0.5 bg-gradient-to-tr from-cyan-400 via-indigo-500 to-amber-400 shadow-md shadow-indigo-600/30 shrink-0 flex items-center justify-center overflow-hidden">
-              <img
-                src={kruSauceLogo}
-                alt="โลโก้ ครูซอส"
-                className="w-full h-full object-cover rounded-[14px]"
-              />
+            <div className="relative shrink-0">
+              <div className="w-11 h-11 rounded-full p-0.5 bg-gradient-to-tr from-cyan-400 via-indigo-500 to-amber-400 shadow-md shadow-indigo-600/30 flex items-center justify-center">
+                <img
+                  src={kruSauceLogo}
+                  alt="คุณครูซอส"
+                  className="w-full h-full object-cover rounded-full"
+                />
+              </div>
+              <span className="absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 border-2 border-slate-900 rounded-full" title="ออนไลน์" />
             </div>
 
             {!collapsed && (
               <div className="min-w-0">
-                <div className="text-xs font-bold text-indigo-400 truncate">
+                <div className="font-extrabold text-sm text-white tracking-tight truncate flex items-center gap-1.5">
+                  <span>KruSos EdTech</span>
+                </div>
+                <div className="text-[11px] text-indigo-300 font-medium truncate">
                   โรงเรียนวัดบางปูน
                 </div>
-                <div className="font-extrabold text-sm text-white truncate">
-                  ครูซอส EdTech
+                <div className="text-[10px] text-emerald-400 font-medium truncate flex items-center gap-1">
+                  <span>คุณครูซอส (ผู้ดูแลระบบ)</span>
                 </div>
               </div>
             )}
@@ -115,30 +121,6 @@ export const TeacherSidebar = ({
               <ChevronLeft className="w-4 h-4" />
             )}
           </button>
-        </div>
-
-        {/* Teacher Profile Card */}
-        <div className={`p-3 border-b border-slate-800/80 ${collapsed ? 'text-center' : ''}`}>
-          <div className="flex items-center gap-3 p-2 rounded-2xl bg-slate-950/60 border border-slate-800">
-            <div className="w-9 h-9 rounded-xl overflow-hidden p-0.5 bg-gradient-to-tr from-amber-400 to-indigo-500 shrink-0 shadow-md">
-              <img
-                src={kruSauceLogo}
-                alt="ครูซอส"
-                className="w-full h-full object-cover rounded-lg"
-              />
-            </div>
-            {!collapsed && (
-              <div className="min-w-0 flex-1">
-                <div className="font-bold text-xs text-white truncate">
-                  คุณครูซอส (Kru Sauce)
-                </div>
-                <div className="text-[10px] text-emerald-400 flex items-center gap-1 font-medium">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-                  <span>ครูผู้สอน / ผู้ดูแลระบบ</span>
-                </div>
-              </div>
-            )}
-          </div>
         </div>
 
         {/* Quick Subject Switcher Dropdown */}

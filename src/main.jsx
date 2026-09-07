@@ -12,7 +12,7 @@ try {
     iconLink.rel = 'icon';
     document.head.appendChild(iconLink);
   }
-  iconLink.type = 'image/jpeg';
+  iconLink.type = 'image/png';
   iconLink.href = kruSauceLogo;
 
   let appleLink = document.querySelector("link[rel='apple-touch-icon']");
