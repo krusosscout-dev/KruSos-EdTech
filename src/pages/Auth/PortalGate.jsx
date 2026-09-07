@@ -4,6 +4,7 @@ import {
   User
 } from 'lucide-react';
 import { StudentCartoonAvatar } from '../../components/StudentCartoonAvatar';
+import kruSauceLogo from '../../assets/logo.js';
 
 export const PortalGate = ({ subjects = {}, onLoginTeacher, onLoginStudent }) => {
   const [passcode, setPasscode] = useState('');
@@ -136,7 +137,7 @@ export const PortalGate = ({ subjects = {}, onLoginTeacher, onLoginStudent }) =>
           <div className="absolute -inset-1.5 bg-gradient-to-r from-cyan-400 via-indigo-500 to-amber-400 rounded-full blur-md opacity-75 group-hover:opacity-100 transition duration-500 animate-pulse" />
           <div className="relative w-28 h-28 sm:w-32 sm:h-32 rounded-full p-1 bg-gradient-to-tr from-cyan-400 via-indigo-500 to-amber-400 shadow-2xl flex items-center justify-center">
             <img
-              src="/kru-sauce-logo.jpg"
+              src={kruSauceLogo}
               alt="ครูซอส สอนสังคม"
               className="w-full h-full object-cover rounded-full shadow-inner"
             />
@@ -144,14 +145,9 @@ export const PortalGate = ({ subjects = {}, onLoginTeacher, onLoginStudent }) =>
         </div>
 
         {/* Headline: แถวเดียว ไม่ขึ้น 2 บรรทัด */}
-        <div className="space-y-1">
-          <div className="inline-block px-3 py-0.5 rounded-full bg-gradient-to-r from-cyan-500/20 via-indigo-500/20 to-amber-500/20 border border-indigo-400/40 text-cyan-300 text-[11px] font-black tracking-widest uppercase font-mono shadow-sm">
-            KRUSOS EDTECH
-          </div>
-          <h1 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-black text-white tracking-tight whitespace-nowrap">
-            ระบบบันทึกคะแนนและพัฒนาการเรียนรู้
-          </h1>
-        </div>
+        <h1 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-black text-white tracking-tight whitespace-nowrap">
+          ระบบบันทึกคะแนนและพัฒนาการเรียนรู้
+        </h1>
 
         {/* Subtitle: 2 บรรทัด (เพิ่มขนาดตัวอักษรตามคำขอ) */}
         <div className="space-y-1.5 text-center">

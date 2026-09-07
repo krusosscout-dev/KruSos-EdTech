@@ -5,6 +5,7 @@ import {
   Volume2, VolumeX, ChevronDown, BookOpen, Layers
 } from 'lucide-react';
 import { useSocket } from '../context/SocketContext';
+import kruSauceLogo from '../assets/logo.js';
 
 export const TeacherSidebar = ({
   activeMenu = 'overview',
@@ -83,7 +84,7 @@ export const TeacherSidebar = ({
           <div className={`flex items-center gap-3 min-w-0 ${collapsed ? 'mx-auto' : ''}`}>
             <div className="w-10 h-10 rounded-2xl p-0.5 bg-gradient-to-tr from-cyan-400 via-indigo-500 to-amber-400 shadow-md shadow-indigo-600/30 shrink-0 flex items-center justify-center overflow-hidden">
               <img
-                src="/kru-sauce-logo.jpg"
+                src={kruSauceLogo}
                 alt="โลโก้ ครูซอส"
                 className="w-full h-full object-cover rounded-[14px]"
               />
@@ -121,7 +122,7 @@ export const TeacherSidebar = ({
           <div className="flex items-center gap-3 p-2 rounded-2xl bg-slate-950/60 border border-slate-800">
             <div className="w-9 h-9 rounded-xl overflow-hidden p-0.5 bg-gradient-to-tr from-amber-400 to-indigo-500 shrink-0 shadow-md">
               <img
-                src="/kru-sauce-logo.jpg"
+                src={kruSauceLogo}
                 alt="ครูซอส"
                 className="w-full h-full object-cover rounded-lg"
               />

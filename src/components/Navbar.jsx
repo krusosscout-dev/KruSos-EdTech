@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Trophy, Volume2, VolumeX, Wifi, WifiOff, Users, ArrowLeft, Shield, Globe, Settings, Database, Check } from 'lucide-react';
 import { useSocket } from '../context/SocketContext';
+import kruSauceLogo from '../assets/logo.js';
 
 export const Navbar = ({ role = '', roomId = '', onBack = null }) => {
   const { connected, syncMode, customServerUrl, setServerUrl, soundMuted, toggleSound } = useSocket();
@@ -38,7 +39,7 @@ export const Navbar = ({ role = '', roomId = '', onBack = null }) => {
             <div className="flex items-center space-x-2.5">
               <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-cyan-400 via-indigo-500 to-amber-400 p-0.5 flex items-center justify-center shadow-lg shadow-indigo-500/20 shrink-0">
                 <img
-                  src="/kru-sauce-logo.jpg"
+                  src={kruSauceLogo}
                   alt="ครูซอสสอนสังคม"
                   className="w-full h-full object-cover rounded-full"
                 />

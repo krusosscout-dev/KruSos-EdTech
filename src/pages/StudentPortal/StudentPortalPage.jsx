@@ -7,6 +7,7 @@ import {
 import { StudentCartoonAvatar } from '../../components/StudentCartoonAvatar';
 import { GradeLevelLeaderboard } from '../Leaderboard/GradeLevelLeaderboard';
 import { calculateGrade } from '../../components/ExcelHelper';
+import kruSauceLogo from '../../assets/logo.js';
 
 export const StudentPortalPage = ({
   student,
@@ -146,7 +147,7 @@ export const StudentPortalPage = ({
           <div className="flex items-center gap-3 min-w-0">
             <div className="w-11 h-11 rounded-2xl p-0.5 bg-gradient-to-tr from-cyan-400 via-indigo-500 to-amber-400 shadow-md shadow-indigo-600/30 shrink-0 flex items-center justify-center overflow-hidden">
               <img
-                src="/kru-sauce-logo.jpg"
+                src={kruSauceLogo}
                 alt="โลโก้ ครูซอส"
                 className="w-full h-full object-cover rounded-[14px]"
               />
