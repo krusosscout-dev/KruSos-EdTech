@@ -3,7 +3,7 @@ import { Plus, FileText, Calendar, Award, Trash2, Edit3, CheckCircle2, BarChart2
 
 const CATEGORIES = ['ใบงาน', 'ชิ้นงาน/โครงงาน', 'กิจกรรมกลุ่ม', 'สอบย่อย', 'สอบกลางภาค', 'สอบปลายภาค', 'การบ้าน'];
 
-export const AssignmentHub = ({ subject, onAddAssignment, onDeleteAssignment, onUpdateAssignment }) => {
+export const AssignmentHub = ({ subject = {}, assignments: propAssignments, onAddAssignment, onDeleteAssignment, onUpdateAssignment }) => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingAsg, setEditingAsg] = useState(null);
   const [title, setTitle] = useState('');
@@ -12,7 +12,10 @@ export const AssignmentHub = ({ subject, onAddAssignment, onDeleteAssignment, on
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [description, setDescription] = useState('');
 
-  const { assignments = [], students = [], scores = {} } = subject;
+  const safeSubject = subject || {};
+  const assignments = propAssignments || safeSubject.assignments || [];
+  const students = safeSubject.students || [];
+  const scores = safeSubject.scores || {};
 
   const handleOpenAdd = () => {
     setTitle(`งานที่ ${assignments.length + 1}: `);

@@ -38,8 +38,15 @@ const MainApp = () => {
 
 
 
-  // Sync / load initial subjects from server if available
+  const hasBackend = typeof window !== 'undefined' && (
+    window.location.hostname === 'localhost' ||
+    window.location.hostname === '127.0.0.1' ||
+    window.location.port === '3000'
+  );
+
+  // Sync / load initial subjects from server if available (local development only)
   useEffect(() => {
+    if (!hasBackend) return;
     fetch('/api/subjects')
       .then(res => res.json())
       .then(data => {
@@ -101,11 +108,13 @@ const MainApp = () => {
     setSubjects({ ...all });
     setSelectedSubjectId(newSubj.id);
 
-    fetch('/api/subjects', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(newSubj)
-    }).catch(() => {});
+    if (hasBackend) {
+      fetch('/api/subjects', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newSubj)
+      }).catch(() => {});
+    }
   };
 
   const handleDeleteSubject = (subjId) => {
@@ -116,9 +125,11 @@ const MainApp = () => {
       setSelectedSubjectId(null);
     }
 
-    fetch(`/api/subjects/${subjId}`, {
-      method: 'DELETE'
-    }).catch(() => {});
+    if (hasBackend) {
+      fetch(`/api/subjects/${subjId}`, {
+        method: 'DELETE'
+      }).catch(() => {});
+    }
   };
 
   const handleSaveSubject = (updated) => {
@@ -128,24 +139,28 @@ const MainApp = () => {
       [updated.id]: updated
     }));
 
-    fetch(`/api/subjects/${updated.id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(updated)
-    }).catch(() => {});
+    if (hasBackend) {
+      fetch(`/api/subjects/${updated.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updated)
+      }).catch(() => {});
+    }
   };
 
   const handleResetMock = () => {
     const mock = SubjectStore.resetToMockData();
     setSubjects(mock);
-    fetch('/api/subjects/reset', { method: 'POST' })
-      .then(res => res.json())
-      .then(data => {
-        if (data && data.success && data.data) {
-          setSubjects(data.data);
-        }
-      })
-      .catch(() => {});
+    if (hasBackend) {
+      fetch('/api/subjects/reset', { method: 'POST' })
+        .then(res => res.json())
+        .then(data => {
+          if (data && data.success && data.data) {
+            setSubjects(data.data);
+          }
+        })
+        .catch(() => {});
+    }
   };
 
   const handleSelectRole = (selectedRole, pin) => {

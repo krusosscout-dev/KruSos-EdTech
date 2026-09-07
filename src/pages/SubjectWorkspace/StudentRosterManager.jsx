@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import { Upload, Plus, Download, Users, Trash2, Edit3, CheckCircle2, AlertCircle, FileSpreadsheet, X } from 'lucide-react';
 import { parseStudentExcel, downloadStudentTemplate } from '../../components/ExcelHelper';
 
-export const StudentRosterManager = ({ subject, onUpdateStudents, onAddStudent, onDeleteStudent }) => {
+export const StudentRosterManager = ({ subject = {}, onUpdateStudents, onAddStudent, onDeleteStudent }) => {
   const [showManualModal, setShowManualModal] = useState(false);
   const [studentNumber, setStudentNumber] = useState('');
   const [studentCode, setStudentCode] = useState('');
@@ -15,7 +15,8 @@ export const StudentRosterManager = ({ subject, onUpdateStudents, onAddStudent, 
   const [uploadError, setUploadError] = useState('');
 
   const fileInputRef = useRef(null);
-  const { students = [] } = subject;
+  const safeSubject = subject || {};
+  const { students = [] } = safeSubject;
 
   const handleOpenManual = () => {
     setStudentNumber(students.length + 1);

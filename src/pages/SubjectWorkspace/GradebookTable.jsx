@@ -16,7 +16,7 @@ const getCategoryStyle = (category = '') => {
   return { bg: 'bg-indigo-500/25 text-indigo-200 border-indigo-400/50', label: category || 'ภารกิจ' };
 };
 
-export const GradebookTable = ({ subject, onUpdateScore, onAddAssignment, onGoToGrading, onGoToAssignments }) => {
+export const GradebookTable = ({ subject = {}, onUpdateScore, onAddAssignment, onGoToGrading, onGoToAssignments }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedAssignment, setSelectedAssignment] = useState(null);
 
@@ -27,7 +27,8 @@ export const GradebookTable = ({ subject, onUpdateScore, onAddAssignment, onGoTo
   const [newMaxScore, setNewMaxScore] = useState(10);
   const [newDesc, setNewDesc] = useState('');
 
-  const { students = [], assignments = [], scores = {} } = subject;
+  const safeSubject = subject || {};
+  const { students = [], assignments = [], scores = {} } = safeSubject;
 
   // Filter students by search term
   const filteredStudents = students.filter((s) => {

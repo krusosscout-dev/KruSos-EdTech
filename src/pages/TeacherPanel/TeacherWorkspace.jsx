@@ -479,6 +479,7 @@ export const TeacherWorkspace = ({
           {activeMenu === 'assignments' && activeSubject && (
             <div className="space-y-4">
               <AssignmentHub
+                subject={activeSubject}
                 assignments={activeSubject.assignments || []}
                 onAddAssignment={handleAddAssignment}
                 onUpdateAssignment={handleUpdateAssignment}

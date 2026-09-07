@@ -20,10 +20,11 @@ const COMP_5_ITEMS = [
   { id: 5, name: '5. ความสามารถในการใช้เทคโนโลยี' },
 ];
 
-export const StandardAssessmentView = ({ subject, onSaveAssessments }) => {
+export const StandardAssessmentView = ({ subject = {}, onSaveAssessments }) => {
   const [activeTab, setActiveTab] = useState('characteristics'); // 'characteristics' | 'competencies' | 'readingAnalysis'
 
-  const { students = [], assessments = {} } = subject;
+  const safeSubject = subject || {};
+  const { students = [], assessments = {} } = safeSubject;
   const characteristics = assessments.characteristics || {};
   const competencies = assessments.competencies || {};
   const readingAnalysis = assessments.readingAnalysis || {};

@@ -9,12 +9,13 @@ const STATUS_OPTIONS = [
   { key: 'activity', label: 'กิจกรรม', symbol: 'ก', color: 'bg-purple-600 border-purple-400 text-white' },
 ];
 
-export const AttendanceTracker = ({ subject, onSaveAttendance }) => {
+export const AttendanceTracker = ({ subject = {}, onSaveAttendance }) => {
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0, 10));
   const [selectedPeriod, setSelectedPeriod] = useState('คาบ 1 (08:30 - 09:30)');
   const [activeSessionId, setActiveSessionId] = useState(() => `att_${new Date().toISOString().slice(0, 10)}`);
 
-  const { students = [], attendance = [] } = subject;
+  const safeSubject = subject || {};
+  const { students = [], attendance = [] } = safeSubject;
 
   // Find existing session or initialize new
   const currentSession = attendance.find(a => a.date === selectedDate) || {

@@ -5,11 +5,12 @@ import {
 } from 'lucide-react';
 import { calculateGrade, exportComprehensiveExcel } from '../../components/ExcelHelper';
 
-export const FinalGradingView = ({ subject }) => {
+export const FinalGradingView = ({ subject = {} }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterGrade, setFilterGrade] = useState('ALL');
 
-  const { students = [], assignments = [], scores = {} } = subject;
+  const safeSubject = subject || {};
+  const { students = [], assignments = [], scores = {} } = safeSubject;
 
   // Compute total max score of assignments
   const totalMaxScore = assignments.reduce((acc, a) => acc + (parseFloat(a.maxScore) || 0), 0);
