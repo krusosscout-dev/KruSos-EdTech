@@ -80,10 +80,10 @@ export const TeacherSidebar = ({
         }`}
       >
         {/* Sidebar Header: Single Unified Profile & School Brand (ไม่ซ้ำซ้อน) */}
-        <div className="p-3.5 border-b border-slate-800 flex items-center justify-between gap-2.5">
-          <div className={`flex items-center gap-3 min-w-0 ${collapsed ? 'mx-auto' : ''}`}>
+        <div className="relative p-3 border-b border-slate-800 flex items-center min-h-[72px]">
+          <div className={`flex items-center gap-3 min-w-0 ${collapsed ? 'mx-auto' : 'pr-6 flex-1'}`}>
             <div className="relative shrink-0">
-              <div className="w-11 h-11 rounded-full p-0.5 bg-gradient-to-tr from-cyan-400 via-indigo-500 to-amber-400 shadow-md shadow-indigo-600/30 flex items-center justify-center">
+              <div className="w-10 h-10 rounded-full p-0.5 bg-gradient-to-tr from-cyan-400 via-indigo-500 to-amber-400 shadow-md shadow-indigo-600/30 flex items-center justify-center">
                 <img
                   src={kruSauceLogo}
                   alt="คุณครูซอส"
@@ -94,9 +94,9 @@ export const TeacherSidebar = ({
             </div>
 
             {!collapsed && (
-              <div className="min-w-0">
-                <div className="font-extrabold text-sm text-white tracking-tight truncate flex items-center gap-1.5">
-                  <span>KruSos EdTech</span>
+              <div className="min-w-0 flex-1">
+                <div className="font-extrabold text-sm text-white tracking-tight truncate">
+                  KruSos EdTech
                 </div>
                 <div className="text-[11px] text-indigo-300 font-medium truncate">
                   โรงเรียนวัดบางปูน
@@ -108,12 +108,12 @@ export const TeacherSidebar = ({
             )}
           </div>
 
-          {/* Collapse toggle (Desktop only) */}
+          {/* Floating Collapse/Expand Button: Positioned on the border, offset from logo, small & distinct */}
           <button
             type="button"
             onClick={onToggleCollapse}
-            className="hidden lg:flex p-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white border border-slate-700 transition-colors shrink-0"
-            title={collapsed ? 'ขยายแถบเมนู' : 'ย่อแถบเมนู'}
+            className="hidden lg:flex absolute -right-3.5 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-slate-800 hover:bg-indigo-600 text-slate-300 hover:text-white border border-slate-700 shadow-md shadow-black/50 items-center justify-center transition-all duration-200 hover:scale-110 z-50 cursor-pointer"
+            title={collapsed ? 'ขยายแถบเมนู (คลิก)' : 'ย่อแถบเมนู (คลิก)'}
           >
             {collapsed ? (
               <ChevronRight className="w-4 h-4" />
