@@ -48,7 +48,7 @@ export class SubjectStore {
     return subject;
   }
 
-  static createSubject({ code, name, gradeLevel, academicYear, semester, color, icon }) {
+  static createSubject({ code, name, gradeLevel, academicYear, semester, color, icon, students }) {
     const id = `SUBJ_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
     const newSubject = {
       id,
@@ -59,7 +59,7 @@ export class SubjectStore {
       semester: semester || '1',
       color: color || '#6366f1',
       icon: icon || '📘',
-      students: [],
+      students: (students && Array.isArray(students)) ? students : [],
       assignments: [],
       scores: {},
       attendance: [],

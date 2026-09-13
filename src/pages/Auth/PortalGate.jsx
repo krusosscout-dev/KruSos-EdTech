@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { StudentCartoonAvatar } from '../../components/StudentCartoonAvatar';
 import kruSauceLogo from '../../assets/logo.js';
+import { MasterRosterStore } from '../../services/masterRosterStore';
 
 export const PortalGate = ({ subjects = {}, onLoginTeacher, onLoginStudent }) => {
   const [passcode, setPasscode] = useState('');
@@ -14,9 +15,11 @@ export const PortalGate = ({ subjects = {}, onLoginTeacher, onLoginStudent }) =>
   const [selectedGradeFilter, setSelectedGradeFilter] = useState('all');
   const [copiedCode, setCopiedCode] = useState(null);
 
-  // Flatten unique students across all subjects
+  // Flatten unique students across all subjects AND master rosters
   const allStudents = useMemo(() => {
     const studentMap = new Map();
+
+    // 1. Students enrolled in subjects
     Object.values(subjects).forEach((subj) => {
       (subj.students || []).forEach((s) => {
         if (!studentMap.has(s.id)) {
@@ -30,6 +33,21 @@ export const PortalGate = ({ subjects = {}, onLoginTeacher, onLoginStudent }) =>
         }
       });
     });
+
+    // 2. Students in Master Roster Bank
+    const masterRosters = MasterRosterStore.getMasterRosters();
+    Object.entries(masterRosters).forEach(([gradeName, sList]) => {
+      (sList || []).forEach((s) => {
+        if (!studentMap.has(s.id)) {
+          studentMap.set(s.id, {
+            ...s,
+            gradeLevel: gradeName,
+            subjectsEnrolled: []
+          });
+        }
+      });
+    });
+
     return Array.from(studentMap.values()).sort(
       (a, b) => a.studentNumber - b.studentNumber
     );

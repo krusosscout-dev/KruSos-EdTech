@@ -22,9 +22,11 @@ export const StudentPortalPage = ({
   // Find all subjects this student is enrolled in
   const enrolledSubjects = useMemo(() => {
     return Object.values(subjects).filter((subj) => {
-      return (subj.students || []).some((s) => s.id === student.id);
+      return (subj.students || []).some(
+        (s) => s.id === student.id || (s.studentCode && s.studentCode === student.studentCode)
+      );
     });
-  }, [subjects, student.id]);
+  }, [subjects, student.id, student.studentCode]);
 
   // Set default selected subject if not set
   const currentSubject = useMemo(() => {

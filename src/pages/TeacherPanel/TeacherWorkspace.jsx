@@ -14,6 +14,8 @@ import { GradeLevelLeaderboard } from '../Leaderboard/GradeLevelLeaderboard';
 import { exportComprehensiveExcel } from '../../components/ExcelHelper';
 import { LuckyWheelModal } from '../../components/LuckyWheelModal';
 import { CameraScanner } from '../AdminPanel/CameraScanner';
+import { MasterRosterManager } from './MasterRosterManager';
+import { MasterRosterStore } from '../../services/masterRosterStore';
 
 export const TeacherWorkspace = ({
   subjects = {},
@@ -25,7 +27,7 @@ export const TeacherWorkspace = ({
   onResetMock,
   onLogout
 }) => {
-  const [activeMenu, setActiveMenu] = useState('overview'); // 'overview' | 'gradebook' | 'assignments' | 'grading' | 'leaderboard' | 'assessments' | 'attendance' | 'roster' | 'tools' | 'reports'
+  const [activeMenu, setActiveMenu] = useState('overview'); // 'overview' | 'gradebook' | 'assignments' | 'grading' | 'leaderboard' | 'assessments' | 'attendance' | 'roster' | 'masterRoster' | 'tools' | 'reports'
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -37,11 +39,12 @@ export const TeacherWorkspace = ({
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newCode, setNewCode] = useState('');
   const [newName, setNewName] = useState('');
-  const [newGradeLevel, setNewGradeLevel] = useState('ชั้นประถมศึกษาปีที่ 5/1');
+  const [newGradeLevel, setNewGradeLevel] = useState('ชั้นประถมศึกษาปีที่ 6/1');
   const [newAcademicYear, setNewAcademicYear] = useState('2569');
   const [newSemester, setNewSemester] = useState('1');
   const [newColor, setNewColor] = useState('#6366f1');
   const [newIcon, setNewIcon] = useState('💻');
+  const [autoImportRoster, setAutoImportRoster] = useState(true);
 
   const subjectList = Object.values(subjects);
   const activeSubject = subjects[selectedSubjectId] || subjectList[0] || null;
@@ -155,6 +158,14 @@ export const TeacherWorkspace = ({
     e.preventDefault();
     if (!newCode.trim() || !newName.trim()) return;
 
+    let initialStudents = [];
+    if (autoImportRoster) {
+      const fromMaster = MasterRosterStore.getStudentsByGrade(newGradeLevel);
+      if (fromMaster && fromMaster.length > 0) {
+        initialStudents = fromMaster.map((s) => ({ ...s }));
+      }
+    }
+
     onCreateSubject({
       code: newCode.trim().toUpperCase(),
       name: newName.trim(),
@@ -162,7 +173,8 @@ export const TeacherWorkspace = ({
       academicYear: newAcademicYear,
       semester: newSemester,
       color: newColor,
-      icon: newIcon
+      icon: newIcon,
+      students: initialStudents
     });
 
     setShowCreateModal(false);
@@ -187,7 +199,8 @@ export const TeacherWorkspace = ({
     leaderboard: '🏆 ทำเนียบเกียรติยศระดับชั้น (Top 3 Podium)',
     assessments: '📋 ประเมิน 3 ด้านตามเกณฑ์ สพฐ.',
     attendance: '📅 เช็คชื่อ & แต้มพฤติกรรมรายคาบ',
-    roster: '👥 ทะเบียนรายชื่อนักเรียน',
+    roster: '👥 รายชื่อนักเรียนในวิชานี้',
+    masterRoster: '🏫 ทะเบียนนักเรียนแยกตามระดับชั้น (คลังรายชื่อกลาง)',
     tools: '🎡 เครื่องมือเสริมในห้องเรียน',
     reports: '📊 ส่งออก ปพ.5 & รายงานทางการ'
   };
@@ -543,7 +556,7 @@ export const TeacherWorkspace = ({
           )}
 
           {/* ========================================================
-             MENU: STUDENT ROSTER MANAGER
+             MENU: STUDENT ROSTER MANAGER (รายวิชาปัจจุบัน)
              ======================================================== */}
           {activeMenu === 'roster' && activeSubject && (
             <div className="space-y-4">
@@ -552,6 +565,15 @@ export const TeacherWorkspace = ({
                 onUpdateStudents={handleUpdateStudents}
                 onAddStudent={handleAddStudent}
               />
+            </div>
+          )}
+
+          {/* ========================================================
+             MENU: MASTER ROSTER MANAGER (ทะเบียนนักเรียนแยกตามระดับชั้น)
+             ======================================================== */}
+          {activeMenu === 'masterRoster' && (
+            <div className="space-y-4">
+              <MasterRosterManager />
             </div>
           )}
 
@@ -711,23 +733,56 @@ export const TeacherWorkspace = ({
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-300">ระดับชั้น</label>
+                  <label className="text-xs font-bold text-slate-300 flex items-center justify-between">
+                    <span>ระดับชั้น</span>
+                    <span className="text-[10px] text-indigo-400">ทะเบียนกลาง</span>
+                  </label>
                   <input
                     type="text"
                     required
+                    list="master-grades-datalist"
+                    placeholder="เช่น ชั้นประถมศึกษาปีที่ 6/1"
                     value={newGradeLevel}
                     onChange={(e) => setNewGradeLevel(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white outline-none focus:border-indigo-400"
+                    className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white outline-none focus:border-indigo-400 font-medium"
                   />
+                  <datalist id="master-grades-datalist">
+                    {MasterRosterStore.getGradeLevels().map((g) => (
+                      <option key={g} value={g} />
+                    ))}
+                  </datalist>
                 </div>
               </div>
+
+              {/* Smart Auto-Import Checkbox from Master Roster */}
+              {(() => {
+                const count = MasterRosterStore.getStudentsByGrade(newGradeLevel).length;
+                return count > 0 ? (
+                  <div className="p-3 rounded-2xl bg-indigo-950/70 border border-indigo-500/50 flex items-center justify-between gap-3 animate-pop">
+                    <label className="inline-flex items-center gap-2 cursor-pointer text-xs text-slate-200 select-none">
+                      <input
+                        type="checkbox"
+                        checked={autoImportRoster}
+                        onChange={(e) => setAutoImportRoster(e.target.checked)}
+                        className="w-4 h-4 rounded accent-indigo-500 cursor-pointer"
+                      />
+                      <span>
+                        ดึงรายชื่อจากทะเบียนกลาง <strong>{newGradeLevel}</strong> มาใช้อัตโนมัติ
+                      </span>
+                    </label>
+                    <span className="px-2.5 py-0.5 rounded-lg bg-indigo-900 border border-indigo-700 text-amber-300 font-mono font-black text-xs shrink-0">
+                      {count} คน (พร้อมรหัส)
+                    </span>
+                  </div>
+                ) : null;
+              })()}
 
               <div className="space-y-1">
                 <label className="text-xs font-bold text-slate-300">ชื่อรายวิชา</label>
                 <input
                   type="text"
                   required
-                  placeholder="เช่น วิทยาการคำนวณ"
+                  placeholder="เช่น วิทยาการคำนวณ หรือ วิทยาศาสตร์และเทคโนโลยี"
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
                   className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white outline-none focus:border-indigo-400"

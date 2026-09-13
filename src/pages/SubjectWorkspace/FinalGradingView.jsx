@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { calculateGrade, exportComprehensiveExcel } from '../../components/ExcelHelper';
 import { ScoreWheelInput } from '../../components/ScoreWheelInput';
+import { generateAutoStudentCode } from '../../services/masterRosterStore';
 
 export const FinalGradingView = ({
   subject = {},
@@ -1039,8 +1040,8 @@ export const FinalGradingView = ({
                         <div className="font-bold text-sm sm:text-base text-white truncate" title={`${std.title || ''}${std.name}`}>
                           {std.title || ''}{std.name}
                         </div>
-                        <div className="text-[11px] text-slate-400 font-mono mt-0.5">
-                          รหัส: {std.studentCode || '-'}
+                        <div className="text-[11px] text-amber-300 font-mono mt-0.5">
+                          รหัส: {std.studentCode || generateAutoStudentCode(safeSubject.gradeLevel, std.studentNumber)}
                         </div>
                       </td>
 

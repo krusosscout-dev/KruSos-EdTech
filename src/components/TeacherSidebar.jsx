@@ -43,8 +43,9 @@ export const TeacherSidebar = ({
     {
       title: 'การจัดการชั้นเรียน',
       items: [
+        { key: 'masterRoster', label: 'ทะเบียนนักเรียนแยกชั้น', icon: School, isHighlight: true },
         { key: 'attendance', label: 'เช็คชื่อ & แต้มรายคาบ', icon: CheckSquare },
-        { key: 'roster', label: 'ทะเบียนรายชื่อนักเรียน', icon: Users, badge: currentSubject?.students?.length ? `${currentSubject.students.length} คน` : null },
+        { key: 'roster', label: 'รายชื่อนักเรียนในวิชา', icon: Users, badge: currentSubject?.students?.length ? `${currentSubject.students.length} คน` : null },
         { key: 'tools', label: 'เครื่องมือห้องเรียน (วงล้อ/QR)', icon: Sparkles }
       ]
     },
