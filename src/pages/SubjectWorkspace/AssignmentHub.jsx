@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Plus, FileText, Calendar, Award, Trash2, Edit3, CheckCircle2, BarChart2, X, AlertCircle } from 'lucide-react';
+import { confirmDialog } from '../../components/ModernDialog';
 
 const CATEGORIES = ['ใบงาน', 'ชิ้นงาน/โครงงาน', 'กิจกรรมกลุ่ม', 'สอบย่อย', 'สอบกลางภาค', 'สอบปลายภาค', 'การบ้าน'];
 
@@ -167,8 +168,16 @@ export const AssignmentHub = ({ subject = {}, assignments: propAssignments, onAd
                       <Edit3 className="w-4 h-4" />
                     </button>
                     <button
-                      onClick={() => {
-                        if (window.confirm(`คุณแน่ใจหรือไม่ว่าต้องการลบช่องคะแนน "${asg.title}"? คะแนนที่เคยกรอกในช่องนี้จะถูกลบออกด้วย`)) {
+                      onClick={async () => {
+                        const ok = await confirmDialog({
+                          title: 'ยืนยันการลบชิ้นงาน',
+                          message: `คุณแน่ใจหรือไม่ว่าต้องการลบช่องคะแนน "${asg.title}"?`,
+                          detail: '⚠️ คะแนนที่เคยกรอกในช่องนี้จะถูกลบออกด้วยอย่างถาวร',
+                          type: 'danger',
+                          confirmText: 'ใช่, ลบชิ้นงาน',
+                          cancelText: 'ยกเลิก'
+                        });
+                        if (ok) {
                           onDeleteAssignment(asg.id);
                         }
                       }}

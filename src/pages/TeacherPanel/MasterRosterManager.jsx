@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { MasterRosterStore, generateAutoStudentCode } from '../../services/masterRosterStore';
 import { parseStudentExcel, downloadStudentTemplate } from '../../components/ExcelHelper';
+import { confirmDialog, alertDialog } from '../../components/ModernDialog';
 
 export const MasterRosterManager = ({ onSelectGradeForSubject }) => {
   const [rosters, setRosters] = useState(() => MasterRosterStore.getMasterRosters());
@@ -80,8 +81,16 @@ export const MasterRosterManager = ({ onSelectGradeForSubject }) => {
   };
 
   // Delete Grade Level
-  const handleDeleteGrade = (grade) => {
-    if (!window.confirm(`คุณครูต้องการลบระดับชั้น "${grade}" พร้อมรายชื่อทั้งหมดใช่หรือไม่?`)) return;
+  const handleDeleteGrade = async (grade) => {
+    const ok = await confirmDialog({
+      title: 'ยืนยันการลบระดับชั้น',
+      message: `คุณครูต้องการลบระดับชั้น "${grade}" พร้อมรายชื่อทั้งหมดใช่หรือไม่?`,
+      detail: '⚠️ ข้อมูลนักเรียนทั้งหมดในระดับชั้นนี้จะถูกลบออกจากทะเบียนกลางอย่างถาวร',
+      type: 'danger',
+      confirmText: 'ใช่, ลบระดับชั้น',
+      cancelText: 'ยกเลิก'
+    });
+    if (!ok) return;
     MasterRosterStore.deleteGradeLevel(grade);
     refreshRosters();
     const remaining = MasterRosterStore.getGradeLevels();
@@ -141,8 +150,15 @@ export const MasterRosterManager = ({ onSelectGradeForSubject }) => {
   };
 
   // Delete student
-  const handleDeleteStudent = (id, sName) => {
-    if (!window.confirm(`ต้องการลบ "${sName}" ออกจากทะเบียนชั้นนี้ใช่หรือไม่?`)) return;
+  const handleDeleteStudent = async (id, sName) => {
+    const ok = await confirmDialog({
+      title: 'ยืนยันการลบนักเรียน',
+      message: `ต้องการลบ "${sName}" ออกจากทะเบียนชั้นนี้ใช่หรือไม่?`,
+      type: 'danger',
+      confirmText: 'ใช่, ลบนักเรียน',
+      cancelText: 'ยกเลิก'
+    });
+    if (!ok) return;
     MasterRosterStore.deleteStudentFromGrade(selectedGrade, id);
     refreshRosters();
     showToast(`ลบนักเรียนเรียบร้อยแล้ว`);
@@ -157,16 +173,25 @@ export const MasterRosterManager = ({ onSelectGradeForSubject }) => {
     try {
       const parsed = await parseStudentExcel(file);
       if (parsed && parsed.length > 0) {
-        const willReplace = window.confirm(
-          `พบข้อมูลนักเรียน ${parsed.length} คนในไฟล์\n\n- กด "ตกลง (OK)" เพื่อแทนที่รายชื่อเดิมทั้งหมด\n- หรือกด "ยกเลิก (Cancel)" เพื่อเพิ่มต่อท้ายรายชื่อเดิม`
-        );
+        const willReplace = await confirmDialog({
+          title: 'รูปแบบการนำเข้าไฟล์ Excel',
+          message: `พบข้อมูลนักเรียน ${parsed.length} คนในไฟล์`,
+          detail: 'กด "แทนที่เดิมทั้งหมด" เพื่อล้างรายชื่อเดิมในชั้นนี้ หรือกด "เพิ่มต่อท้าย" เพื่อเก็บรายชื่อเดิมไว้',
+          type: 'info',
+          confirmText: 'แทนที่เดิมทั้งหมด',
+          cancelText: 'เพิ่มต่อท้ายรายชื่อเดิม'
+        });
 
         MasterRosterStore.importStudentsToGrade(selectedGrade, parsed, willReplace);
         refreshRosters();
         showToast(`นำเข้านักเรียน ${parsed.length} คน พร้อมสร้างรหัสประจำตัวอัตโนมัติครบถ้วน!`);
       }
     } catch (err) {
-      alert(`ไม่สามารถอ่านไฟล์ได้: ${err.message}`);
+      await alertDialog({
+        title: 'เกิดข้อผิดพลาดในการอ่านไฟล์',
+        message: err.message || 'ไม่สามารถอ่านไฟล์ Excel ได้',
+        type: 'danger'
+      });
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -174,8 +199,16 @@ export const MasterRosterManager = ({ onSelectGradeForSubject }) => {
   };
 
   // Regenerate codes for all students in grade
-  const handleRegenerateCodes = () => {
-    if (!window.confirm(`ต้องการสร้างรหัสประจำตัว 5 หลักอัตโนมัติให้กับนักเรียนทุกคนในชั้น "${selectedGrade}" ใช่หรือไม่?`)) return;
+  const handleRegenerateCodes = async () => {
+    const ok = await confirmDialog({
+      title: 'สร้างรหัสประจำตัวใหม่อัตโนมัติ',
+      message: `ต้องการสร้างรหัสประจำตัว 5 หลักอัตโนมัติให้กับนักเรียนทุกคนในชั้น "${selectedGrade}" ใช่หรือไม่?`,
+      detail: '💡 รหัสประจำตัวใหม่จะถูกสร้างขึ้นอัตโนมัติโดยอิงตามระดับชั้นและเลขที่',
+      type: 'warning',
+      confirmText: 'สร้างรหัสใหม่ทั้งห้อง',
+      cancelText: 'ยกเลิก'
+    });
+    if (!ok) return;
     MasterRosterStore.regenerateCodesForGrade(selectedGrade);
     refreshRosters();
     showToast(`สร้างรหัสประจำตัวอัตโนมัติใหม่ทั้งห้องเรียบร้อยแล้ว`);

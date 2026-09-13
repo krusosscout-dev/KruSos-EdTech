@@ -9,6 +9,8 @@ import {
 import { calculateGrade, exportComprehensiveExcel } from '../../components/ExcelHelper';
 import { ScoreWheelInput } from '../../components/ScoreWheelInput';
 import { generateAutoStudentCode } from '../../services/masterRosterStore';
+import { StudentScoreSlipModal } from '../../components/StudentScoreSlipModal';
+import { confirmDialog } from '../../components/ModernDialog';
 
 export const FinalGradingView = ({
   subject = {},
@@ -22,6 +24,7 @@ export const FinalGradingView = ({
   const [showConfigModal, setShowConfigModal] = useState(false);
   const [showAddExamModal, setShowAddExamModal] = useState(false);
   const [editingExamId, setEditingExamId] = useState(null);
+  const [showScoreSlipModal, setShowScoreSlipModal] = useState(false);
 
   // Formative Section Modal State (สำหรับเพิ่ม/แจงหมวดคะแนนเก็บ เช่น 30, 20, 20)
   const [showAddFormativeModal, setShowAddFormativeModal] = useState(false);
@@ -147,17 +150,27 @@ export const FinalGradingView = ({
             selectedAssignmentIds: []
           }
         ],
-        examColumns: raw.examColumns || defaultGradingConfig.examColumns
+        examColumns: raw.examColumns || defaultGradingConfig.examColumns,
+        isPublished: raw.isPublished !== undefined ? raw.isPublished : true
       };
     }
 
     return {
       formativeSections: raw.formativeSections || defaultGradingConfig.formativeSections,
-      examColumns: raw.examColumns || defaultGradingConfig.examColumns
+      examColumns: raw.examColumns || defaultGradingConfig.examColumns,
+      isPublished: raw.isPublished !== undefined ? raw.isPublished : true
     };
   }, [safeSubject.gradingConfig, defaultGradingConfig]);
 
   const { formativeSections = [], examColumns = [] } = config;
+  const isPublished = config.isPublished !== false;
+
+  const handleTogglePublish = () => {
+    handleSaveConfig({
+      ...config,
+      isPublished: !isPublished
+    });
+  };
 
   // Total Formative Weight (e.g. 30 + 20 + 20 = 70)
   const totalFormativeWeight = useMemo(() => {
@@ -261,8 +274,16 @@ export const FinalGradingView = ({
   };
 
   // Delete a formative section
-  const handleDeleteFormativeSection = (secId) => {
-    if (!window.confirm('คุณครูต้องการลบหมวดคะแนนเก็บนี้ใช่หรือไม่?')) return;
+  const handleDeleteFormativeSection = async (secId) => {
+    const ok = await confirmDialog({
+      title: 'ยืนยันการลบหมวดคะแนน',
+      message: 'คุณครูต้องการลบหมวดคะแนนเก็บนี้ใช่หรือไม่?',
+      detail: '⚠️ ชิ้นงานและคะแนนเก็บในหมวดนี้ทั้งหมดจะถูกนำออกจากสูตรคำนวณ',
+      type: 'danger',
+      confirmText: 'ใช่, ลบหมวดนี้',
+      cancelText: 'ยกเลิก'
+    });
+    if (!ok) return;
     const updated = formativeSections.filter((s) => s.id !== secId);
     handleSaveConfig({
       ...config,
@@ -327,8 +348,16 @@ export const FinalGradingView = ({
   };
 
   // Delete an exam column
-  const handleDeleteExamColumn = (colId) => {
-    if (!window.confirm('คุณครูต้องการลบช่องคะแนนสอบนี้ใช่หรือไม่?')) return;
+  const handleDeleteExamColumn = async (colId) => {
+    const ok = await confirmDialog({
+      title: 'ยืนยันการลบช่องคะแนนสอบ',
+      message: 'คุณครูต้องการลบช่องคะแนนสอบนี้ใช่หรือไม่?',
+      detail: '⚠️ คะแนนสอบของนักเรียนทุกคนในช่องนี้จะถูกลบออกด้วย',
+      type: 'danger',
+      confirmText: 'ใช่, ลบช่องสอบ',
+      cancelText: 'ยกเลิก'
+    });
+    if (!ok) return;
     const updatedExams = examColumns.filter((col) => col.id !== colId);
     handleSaveConfig({
       ...config,
@@ -356,10 +385,15 @@ export const FinalGradingView = ({
   };
 
   // Quick fill full score for an exam/column
-  const handleQuickFill = (colId, maxScore, title) => {
-    if (!window.confirm(`ต้องการกรอกคะแนนเต็ม (${maxScore} แต้ม) ในช่อง "${title}" ให้กับนักเรียนทุกคนใช่หรือไม่?`)) {
-      return;
-    }
+  const handleQuickFill = async (colId, maxScore, title) => {
+    const ok = await confirmDialog({
+      title: 'เติมคะแนนเต็มอัตโนมัติ',
+      message: `ต้องการกรอกคะแนนเต็ม (${maxScore} แต้ม) ในช่อง "${title}" ให้กับนักเรียนทุกคนใช่หรือไม่?`,
+      type: 'info',
+      confirmText: 'เติมคะแนนเต็มทั้งห้อง',
+      cancelText: 'ยกเลิก'
+    });
+    if (!ok) return;
     const updatedScores = { ...scores };
     students.forEach((std) => {
       updatedScores[std.id] = {
@@ -543,7 +577,42 @@ export const FinalGradingView = ({
           </div>
 
           {/* Right: Clean, Uncluttered Action Toolbar */}
-          <div className="flex items-center gap-2.5 flex-wrap sm:flex-nowrap shrink-0">
+          <div className="flex items-center gap-2.5 flex-wrap shrink-0">
+            {/* Toggle Score Visibility */}
+            <button
+              type="button"
+              onClick={handleTogglePublish}
+              className={`px-3.5 py-2.5 rounded-2xl font-bold text-xs shadow flex items-center gap-1.5 transition-all active:scale-95 whitespace-nowrap border ${
+                isPublished
+                  ? 'bg-emerald-950/80 hover:bg-emerald-900 border-emerald-500/60 text-emerald-300'
+                  : 'bg-amber-950/80 hover:bg-amber-900 border-amber-500/60 text-amber-300'
+              }`}
+              title={isPublished ? 'คลิกเพื่อปิดการแสดงผลคะแนนในฝั่งนักเรียน (ระหว่างตรวจ)' : 'คลิกเพื่อประกาศคะแนนให้นักเรียนดูได้'}
+            >
+              {isPublished ? (
+                <>
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                  <span>📢 ประกาศคะแนนแล้ว</span>
+                </>
+              ) : (
+                <>
+                  <AlertCircle className="w-4 h-4 text-amber-400" />
+                  <span>🔒 ซ่อนคะแนนชั่วคราว</span>
+                </>
+              )}
+            </button>
+
+            {/* Individual Score Slips Button */}
+            <button
+              type="button"
+              onClick={() => setShowScoreSlipModal(true)}
+              className="px-3.5 py-2.5 rounded-2xl bg-indigo-950/80 hover:bg-indigo-900 border border-indigo-600/60 text-indigo-300 hover:text-white font-bold text-xs shadow flex items-center gap-1.5 transition-all active:scale-95 whitespace-nowrap"
+              title="พิมพ์สลิปผลการเรียนรายบุคคล (จัดหน้า 2 คนต่อ 1 แผ่น A4) สำหรับแจกผู้ปกครอง"
+            >
+              <FileText className="w-4 h-4 text-indigo-400" />
+              <span>สลิปรายบุคคล</span>
+            </button>
+
             {/* Primary Config Button */}
             <button
               type="button"
@@ -571,7 +640,7 @@ export const FinalGradingView = ({
               type="button"
               onClick={() => window.print()}
               className="p-2.5 rounded-2xl bg-slate-700/70 hover:bg-slate-700 border border-slate-600 text-slate-200 hover:text-white font-bold text-xs shadow transition-all active:scale-95 shrink-0"
-              title="พิมพ์รายงานสรุปผลการเรียนและตัดเกรด"
+              title="พิมพ์รายงานสรุปผลการเรียนและตัดเกรดทั้งตาราง"
             >
               <Printer className="w-4 h-4" />
             </button>
@@ -1658,6 +1727,16 @@ export const FinalGradingView = ({
             </form>
           </div>
         </div>
+      )}
+
+      {/* 📄 Individual Student Score Slip Modal */}
+      {showScoreSlipModal && (
+        <StudentScoreSlipModal
+          isOpen={showScoreSlipModal}
+          onClose={() => setShowScoreSlipModal(false)}
+          subject={safeSubject}
+          studentResults={filteredResults}
+        />
       )}
     </div>
   );

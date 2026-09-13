@@ -2,6 +2,7 @@ import React from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { X, Play, Pause, RotateCcw, Flag, QrCode, Copy, Check, AlertTriangle, ShieldCheck } from 'lucide-react';
 import { useSocket } from '../../context/SocketContext';
+import { confirmDialog } from '../../components/ModernDialog';
 
 export const RoomSettings = ({ roomId, room, onClose }) => {
   const { changeRoomStatus, resetScores } = useSocket();
@@ -21,13 +22,28 @@ export const RoomSettings = ({ roomId, room, onClose }) => {
   };
 
   const handleResetScores = async () => {
-    if (window.confirm('⚠️ คุณแน่ใจหรือไม่ว่าต้องการรีเซ็ตคะแนนทั้งหมดในห้องนี้เป็น 0? (การกระทำนี้ไม่สามารถย้อนกลับได้)')) {
+    const ok = await confirmDialog({
+      title: 'รีเซ็ตคะแนนทั้งหมดในห้อง',
+      message: 'คุณแน่ใจหรือไม่ว่าต้องการรีเซ็ตคะแนนทั้งหมดในห้องนี้เป็น 0?',
+      detail: '⚠️ การกระทำนี้ไม่สามารถย้อนกลับได้ คะแนนสะสมในกิจกรรมสดจะถูกล้างใหม่',
+      type: 'danger',
+      confirmText: 'ใช่, รีเซ็ตคะแนน',
+      cancelText: 'ยกเลิก'
+    });
+    if (ok) {
       await resetScores(roomId);
     }
   };
 
   const handleEndSession = async () => {
-    if (window.confirm('🏁 คุณต้องการ "ปิดกิจกรรม (End Session)" และประกาศผลผู้ชนะเลิศอย่างเป็นทางการใช่หรือไม่?')) {
+    const ok = await confirmDialog({
+      title: 'ปิดกิจกรรมและสรุปผล',
+      message: 'คุณต้องการ "ปิดกิจกรรม (End Session)" และประกาศผลผู้ชนะเลิศอย่างเป็นทางการใช่หรือไม่?',
+      type: 'info',
+      confirmText: 'ปิดกิจกรรมและประกาศผล',
+      cancelText: 'ยกเลิก'
+    });
+    if (ok) {
       await changeRoomStatus(roomId, 'ended');
       onClose();
     }

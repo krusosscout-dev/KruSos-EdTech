@@ -1,12 +1,23 @@
 import React, { useState, useRef } from 'react';
 import {
   Upload, Plus, Download, Users, Trash2, Edit3, CheckCircle2,
-  AlertCircle, FileSpreadsheet, X, School, KeyRound, Copy, Check, Printer, Sparkles
+  AlertCircle, FileSpreadsheet, X, School, KeyRound, Copy, Check, Printer, Sparkles, Award
 } from 'lucide-react';
 import { parseStudentExcel, downloadStudentTemplate } from '../../components/ExcelHelper';
 import { MasterRosterStore, generateAutoStudentCode } from '../../services/masterRosterStore';
+import { BadgeAwardModal } from '../../components/BadgeAwardModal';
+import { AVAILABLE_BADGES } from '../../services/badgeService';
+import { SubjectStore } from '../../services/subjectStore';
+import { confirmDialog, alertDialog } from '../../components/ModernDialog';
 
-export const StudentRosterManager = ({ subject = {}, onUpdateStudents, onAddStudent, onDeleteStudent }) => {
+export const StudentRosterManager = ({
+  subject = {},
+  onUpdateStudents,
+  onAddStudent,
+  onDeleteStudent,
+  onSaveSubject
+}) => {
+  const [badgeModalStudent, setBadgeModalStudent] = useState(null);
   const [showManualModal, setShowManualModal] = useState(false);
   const [editingStudent, setEditingStudent] = useState(null);
   const [studentNumber, setStudentNumber] = useState('');
@@ -27,6 +38,14 @@ export const StudentRosterManager = ({ subject = {}, onUpdateStudents, onAddStud
 
   // Available students in master roster for this subject's grade level
   const masterStudents = MasterRosterStore.getStudentsByGrade(safeSubject.gradeLevel);
+
+  const handleSaveSubject = (updated) => {
+    if (onSaveSubject) {
+      onSaveSubject(updated);
+    } else {
+      SubjectStore.saveSubject(updated);
+    }
+  };
 
   const handleOpenManual = (student = null) => {
     if (student) {
@@ -90,15 +109,25 @@ export const StudentRosterManager = ({ subject = {}, onUpdateStudents, onAddStud
   };
 
   // Sync / Import from Master Roster
-  const handleSyncFromMaster = () => {
+  const handleSyncFromMaster = async () => {
     if (!masterStudents || masterStudents.length === 0) {
-      alert(`ไม่พบรายชื่อในทะเบียนกลางของชั้น "${safeSubject.gradeLevel}"\nคุณครูสามารถไปที่เมนู "ทะเบียนนักเรียนแยกชั้น" เพื่อเพิ่มรายชื่อกลางก่อนได้ครับ`);
+      await alertDialog({
+        title: 'ไม่พบรายชื่อในทะเบียนกลาง',
+        message: `ไม่พบรายชื่อในทะเบียนกลางของชั้น "${safeSubject.gradeLevel}"`,
+        detail: 'คุณครูสามารถไปที่เมนู "ทะเบียนนักเรียนแยกชั้น" เพื่อเพิ่มรายชื่อกลางก่อนได้ครับ',
+        type: 'warning'
+      });
       return;
     }
 
-    const willReplace = window.confirm(
-      `พบรายชื่อในทะเบียนกลางชั้น "${safeSubject.gradeLevel}" จำนวน ${masterStudents.length} คน\n\n- กด "ตกลง (OK)" เพื่อดึงมาแทนที่รายชื่อเดิมในวิชานี้ทั้งหมด\n- หรือกด "ยกเลิก (Cancel)" หากยังไม่ต้องการดึง`
-    );
+    const willReplace = await confirmDialog({
+      title: 'ดึงรายชื่อจากทะเบียนกลาง',
+      message: `พบรายชื่อในทะเบียนกลางชั้น "${safeSubject.gradeLevel}" จำนวน ${masterStudents.length} คน`,
+      detail: 'ต้องการดึงรายชื่อทั้งหมดพร้อมรหัสประจำตัวมาแทนที่รายชื่อเดิมในวิชานี้ใช่หรือไม่?',
+      type: 'info',
+      confirmText: 'ดึงรายชื่อทันที',
+      cancelText: 'ยกเลิก'
+    });
 
     if (willReplace) {
       const imported = masterStudents.map((s) => ({
@@ -112,8 +141,16 @@ export const StudentRosterManager = ({ subject = {}, onUpdateStudents, onAddStud
   };
 
   // Regenerate codes for all students in this subject
-  const handleRegenerateCodes = () => {
-    if (!window.confirm(`ต้องการสร้างรหัสประจำตัว 5 หลักอัตโนมัติให้กับนักเรียนทุกคนในวิชานี้ใช่หรือไม่?`)) return;
+  const handleRegenerateCodes = async () => {
+    const ok = await confirmDialog({
+      title: 'สร้างรหัสประจำตัวใหม่อัตโนมัติ',
+      message: `ต้องการสร้างรหัสประจำตัว 5 หลักอัตโนมัติให้กับนักเรียนทุกคนในวิชานี้ใช่หรือไม่?`,
+      detail: '💡 รหัสประจำตัวใหม่จะถูกคำนวณและสร้างตามระดับชั้นและเลขที่ของนักเรียน',
+      type: 'warning',
+      confirmText: 'สร้างรหัสใหม่ทั้งห้อง',
+      cancelText: 'ยกเลิก'
+    });
+    if (!ok) return;
     const updated = students.map((s, idx) => ({
       ...s,
       studentCode: generateAutoStudentCode(safeSubject.gradeLevel, s.studentNumber || (idx + 1))
@@ -135,9 +172,14 @@ export const StudentRosterManager = ({ subject = {}, onUpdateStudents, onAddStud
     try {
       const parsedStudents = await parseStudentExcel(file);
       if (parsedStudents && parsedStudents.length > 0) {
-        const willReplace = window.confirm(
-          `พบข้อมูลนักเรียน ${parsedStudents.length} คนในไฟล์\n\nกด "ตกลง (OK)" เพื่อแทนที่รายชื่อเดิมทั้งหมด\nหรือกด "ยกเลิก (Cancel)" เพื่อเพิ่มต่อท้ายรายชื่อเดิม`
-        );
+        const willReplace = await confirmDialog({
+          title: 'รูปแบบการนำเข้า Excel',
+          message: `พบข้อมูลนักเรียน ${parsedStudents.length} คนในไฟล์`,
+          detail: 'กด "แทนที่เดิมทั้งหมด" เพื่อล้างรายชื่อเดิมในวิชานี้ หรือกด "เพิ่มต่อท้าย" เพื่อเก็บรายชื่อเดิมไว้',
+          type: 'info',
+          confirmText: 'แทนที่เดิมทั้งหมด',
+          cancelText: 'เพิ่มต่อท้ายรายชื่อเดิม'
+        });
 
         const existingMaxNo = willReplace ? 0 : students.reduce((max, s) => Math.max(max, s.studentNumber || 0), 0);
 
@@ -361,7 +403,30 @@ export const StudentRosterManager = ({ subject = {}, onUpdateStudents, onAddStud
                     {std.title || '-'}
                   </td>
                   <td className="p-3 font-bold text-sm text-white">
-                    {std.name}
+                    <div>{std.name}</div>
+                    {/* Render mini badges if any */}
+                    {(() => {
+                      const badgeIds = safeSubject.studentBadges?.[std.id] || [];
+                      if (badgeIds.length === 0) return null;
+                      return (
+                        <div className="flex items-center gap-1 mt-1 flex-wrap">
+                          {badgeIds.map((bId) => {
+                            const bInfo = AVAILABLE_BADGES.find((b) => b.id === bId);
+                            if (!bInfo) return null;
+                            return (
+                              <span
+                                key={bId}
+                                title={`${bInfo.name}: ${bInfo.description}`}
+                                className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-amber-500/15 border border-amber-500/30 text-amber-300 text-[10px]"
+                              >
+                                <span>{bInfo.icon}</span>
+                                <span className="font-semibold text-[9px]">{bInfo.name}</span>
+                              </span>
+                            );
+                          })}
+                        </div>
+                      );
+                    })()}
                   </td>
                   <td className="p-3 text-center font-bold">
                     <span className={`px-2 py-0.5 rounded-md text-[11px] ${std.gender === 'ญ' ? 'bg-pink-950/80 text-pink-300 border border-pink-700/60' : 'bg-cyan-950/80 text-cyan-300 border border-cyan-700/60'}`}>
@@ -372,6 +437,14 @@ export const StudentRosterManager = ({ subject = {}, onUpdateStudents, onAddStud
                     <div className="flex items-center justify-center gap-1.5">
                       <button
                         type="button"
+                        onClick={() => setBadgeModalStudent(std)}
+                        className="p-1.5 rounded-lg bg-amber-950/40 hover:bg-amber-900/60 text-amber-400 hover:text-amber-200 border border-amber-600/30 transition-colors"
+                        title="มอบเหรียญเกียรติยศ / ตราความดี"
+                      >
+                        <Award className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
                         onClick={() => handleOpenManual(std)}
                         className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors"
                         title="แก้ไขข้อมูลนักเรียน"
@@ -380,8 +453,16 @@ export const StudentRosterManager = ({ subject = {}, onUpdateStudents, onAddStud
                       </button>
                       <button
                         type="button"
-                        onClick={() => {
-                          if (window.confirm(`ต้องการลบ "${std.title || ''}${std.name}" ออกจากรายวิชานี้ใช่หรือไม่?`)) {
+                        onClick={async () => {
+                          const ok = await confirmDialog({
+                            title: 'ยืนยันการลบนักเรียน',
+                            message: `ต้องการลบ "${std.title || ''}${std.name}" ออกจากรายวิชานี้ใช่หรือไม่?`,
+                            detail: '⚠️ ข้อมูลคะแนนของนักเรียนคนนี้ในวิชานี้จะถูกลบออก',
+                            type: 'danger',
+                            confirmText: 'ใช่, ลบออก',
+                            cancelText: 'ยกเลิก'
+                          });
+                          if (ok) {
                             onDeleteStudent(std.id);
                           }
                         }}
@@ -610,6 +691,15 @@ export const StudentRosterManager = ({ subject = {}, onUpdateStudents, onAddStud
           </div>
         </div>
       )}
+
+      {/* Badge Award Modal */}
+      <BadgeAwardModal
+        isOpen={Boolean(badgeModalStudent)}
+        onClose={() => setBadgeModalStudent(null)}
+        student={badgeModalStudent}
+        subject={safeSubject}
+        onSaveSubject={handleSaveSubject}
+      />
     </div>
   );
 };

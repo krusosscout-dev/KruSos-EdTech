@@ -4,6 +4,7 @@ import { useSocket } from '../../context/SocketContext';
 import { Navbar } from '../../components/Navbar';
 import { RequestScoreModal } from './RequestScoreModal';
 import { StudentLeaderboard } from './StudentLeaderboard';
+import { confirmDialog } from '../../components/ModernDialog';
 
 export const StudentDashboard = ({ roomId, onLeave }) => {
   const { roomState, currentGroup, joinRoom, leaveGroup } = useSocket();
@@ -29,8 +30,15 @@ export const StudentDashboard = ({ roomId, onLeave }) => {
     (tx) => tx.groupId === currentGroup.id
   );
 
-  const handleLeave = () => {
-    if (window.confirm('คุณต้องการออกจากกลุ่มนี้ใช่หรือไม่?')) {
+  const handleLeave = async () => {
+    const ok = await confirmDialog({
+      title: 'ออกจากกลุ่ม',
+      message: 'คุณต้องการออกจากกลุ่มนี้ใช่หรือไม่?',
+      type: 'warning',
+      confirmText: 'ใช่, ออกจากกลุ่ม',
+      cancelText: 'ยกเลิก'
+    });
+    if (ok) {
       leaveGroup();
       if (onLeave) onLeave();
     }

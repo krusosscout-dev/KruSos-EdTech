@@ -2,7 +2,7 @@ import React from 'react';
 import {
   LayoutDashboard, BarChart2, FileText, Award, Trophy, CheckSquare,
   Users, Sparkles, Download, LogOut, ChevronLeft, ChevronRight, School,
-  Volume2, VolumeX, ChevronDown, BookOpen, Layers
+  Volume2, VolumeX, ChevronDown, BookOpen, Layers, Database
 } from 'lucide-react';
 import { useSocket } from '../context/SocketContext';
 import kruSauceLogo from '../assets/logo.js';
@@ -53,6 +53,12 @@ export const TeacherSidebar = ({
       title: 'เอกสารและรายงาน',
       items: [
         { key: 'reports', label: 'ส่งออก ปพ.5 (Excel) & พิมพ์', icon: Download }
+      ]
+    },
+    {
+      title: 'ความปลอดภัยและฐานข้อมูล',
+      items: [
+        { key: 'backup', label: 'สำรอง & กู้คืนระบบ (JSON)', icon: Database, isHighlight: true }
       ]
     }
   ];

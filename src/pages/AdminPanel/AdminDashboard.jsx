@@ -7,6 +7,7 @@ import { ScoreModal } from './ScoreModal';
 import { RoomSettings } from './RoomSettings';
 import { ReportExport } from './ReportExport';
 import { LuckyWheelModal } from '../../components/LuckyWheelModal';
+import { confirmDialog, alertDialog } from '../../components/ModernDialog';
 
 export const AdminDashboard = ({ roomId, onBack }) => {
   const { roomState, joinRoom, adminValidateQr, deleteGroup } = useSocket();
@@ -34,7 +35,11 @@ export const AdminDashboard = ({ roomId, onBack }) => {
       setScoreModalData(validation.data);
       setShowScoreModal(true);
     } else {
-      alert(`⚠️ ${validation.reason || 'QR Code ไม่ถูกต้อง หรือหมดอายุแล้ว'}`);
+      await alertDialog({
+        title: 'QR Code ไม่ถูกต้อง',
+        message: validation.reason || 'QR Code ไม่ถูกต้อง หรือหมดอายุแล้ว',
+        type: 'warning'
+      });
     }
   };
 
@@ -53,7 +58,14 @@ export const AdminDashboard = ({ roomId, onBack }) => {
   };
 
   const handleDeleteGroup = async (groupId, groupName) => {
-    if (window.confirm(`คุณแน่ใจหรือไม่ว่าต้องการลบกลุ่ม "${groupName}"?`)) {
+    const ok = await confirmDialog({
+      title: 'ยืนยันการลบกลุ่ม',
+      message: `คุณแน่ใจหรือไม่ว่าต้องการลบกลุ่ม "${groupName}"?`,
+      type: 'danger',
+      confirmText: 'ใช่, ลบกลุ่ม',
+      cancelText: 'ยกเลิก'
+    });
+    if (ok) {
       await deleteGroup(roomId, groupId);
     }
   };

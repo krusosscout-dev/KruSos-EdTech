@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { useSocket } from '../context/SocketContext';
 import { calculateGrade } from '../components/ExcelHelper';
+import { confirmDialog } from '../components/ModernDialog';
 
 const SUBJECT_COLORS = [
   { name: 'Indigo', value: '#6366f1' },
@@ -178,8 +179,15 @@ export const LandingPage = ({ subjects = {}, onSelectSubject, onCreateSubject, o
             </button>
 
             <button
-              onClick={() => {
-                if (window.confirm('คุณต้องการโหลดชุดข้อมูลจำลองสมบูรณ์แบบ (4 รายวิชา พร้อมนักเรียน 15 คน คะแนนเต็ม 100 เช็คชื่อ และประเมิน สพฐ. ครบถ้วน) หรือไม่?')) {
+              onClick={async () => {
+                const ok = await confirmDialog({
+                  title: 'โหลดชุดข้อมูลจำลองสมบูรณ์แบบ',
+                  message: 'คุณต้องการโหลดชุดข้อมูลจำลองสมบูรณ์แบบ (4 รายวิชา พร้อมนักเรียน 15 คน คะแนนเต็ม 100 เช็คชื่อ และประเมิน สพฐ. ครบถ้วน) หรือไม่?',
+                  type: 'info',
+                  confirmText: 'โหลดข้อมูลจำลอง',
+                  cancelText: 'ยกเลิก'
+                });
+                if (ok) {
                   onResetMock?.();
                 }
               }}
@@ -336,9 +344,17 @@ export const LandingPage = ({ subjects = {}, onSelectSubject, onCreateSubject, o
                         </div>
 
                         <button
-                          onClick={(e) => {
+                          onClick={async (e) => {
                             e.stopPropagation();
-                            if (window.confirm(`คุณแน่ใจหรือไม่ว่าต้องการลบวิชา "${subj.name}"? ข้อมูลคะแนนและนักเรียนในวิชานี้จะถูกลบทั้งหมด`)) {
+                            const ok = await confirmDialog({
+                              title: 'ยืนยันการลบรายวิชา',
+                              message: `คุณแน่ใจหรือไม่ว่าต้องการลบวิชา "${subj.name}"?`,
+                              detail: '⚠️ ข้อมูลคะแนนและนักเรียนในวิชานี้จะถูกลบทั้งหมดอย่างถาวร',
+                              type: 'danger',
+                              confirmText: 'ใช่, ลบวิชา',
+                              cancelText: 'ยกเลิก'
+                            });
+                            if (ok) {
                               onDeleteSubject(subj.id);
                             }
                           }}

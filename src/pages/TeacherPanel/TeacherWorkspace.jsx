@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   Menu, BookOpen, Plus, Sparkles, Camera, Download, Award, Users,
-  BarChart2, FileText, CheckSquare, Layers, ArrowRight, Trash2, Printer
+  BarChart2, FileText, CheckSquare, Layers, ArrowRight, Trash2, Printer,
+  Database, Upload, ShieldCheck, RefreshCw, FileJson, CheckCircle2, AlertCircle
 } from 'lucide-react';
 import { TeacherSidebar } from '../../components/TeacherSidebar';
 import { GradebookTable } from '../SubjectWorkspace/GradebookTable';
@@ -16,6 +17,8 @@ import { LuckyWheelModal } from '../../components/LuckyWheelModal';
 import { CameraScanner } from '../AdminPanel/CameraScanner';
 import { MasterRosterManager } from './MasterRosterManager';
 import { MasterRosterStore } from '../../services/masterRosterStore';
+import { BackupService } from '../../services/backupService';
+import { confirmDialog, alertDialog } from '../../components/ModernDialog';
 
 export const TeacherWorkspace = ({
   subjects = {},
@@ -53,6 +56,61 @@ export const TeacherWorkspace = ({
   const totalSubjects = subjectList.length;
   const totalStudents = subjectList.reduce((acc, s) => acc + (s.students?.length || 0), 0);
   const totalAssignments = subjectList.reduce((acc, s) => acc + (s.assignments?.length || 0), 0);
+
+  // Backup & Restore State
+  const [backupSuccess, setBackupSuccess] = useState('');
+  const [backupError, setBackupError] = useState('');
+  const [restoring, setRestoring] = useState(false);
+  const backupFileInputRef = useRef(null);
+
+  const handleExportBackup = () => {
+    setBackupSuccess('');
+    setBackupError('');
+    const res = BackupService.exportFullBackup();
+    if (res.success) {
+      setBackupSuccess(`ดาวน์โหลดไฟล์สำรองข้อมูล "${res.fileName}" เรียบร้อยแล้ว!`);
+      setTimeout(() => setBackupSuccess(''), 4000);
+    } else {
+      setBackupError(`เกิดข้อผิดพลาดในการสำรองข้อมูล: ${res.error}`);
+    }
+  };
+
+  const handleImportBackup = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const confirmRestore = await confirmDialog({
+      title: 'ยืนยันการกู้คืนฐานข้อมูลทั้งระบบ',
+      message: 'การกู้คืนข้อมูลจะนำเข้าข้อมูลรายวิชาและทะเบียนนักเรียนจากไฟล์สำรองมาใช้งาน',
+      detail: '⚠️ ข้อมูลปัจจุบันจะถูกแทนที่ด้วยข้อมูลจากไฟล์สำรอง กรุณาตรวจสอบให้แน่ใจว่าเป็นไฟล์สำรองที่ถูกต้อง',
+      type: 'warning',
+      confirmText: 'ยืนยันกู้คืนข้อมูล',
+      cancelText: 'ยกเลิก'
+    });
+    if (!confirmRestore) {
+      if (backupFileInputRef.current) backupFileInputRef.current.value = '';
+      return;
+    }
+
+    setRestoring(true);
+    setBackupSuccess('');
+    setBackupError('');
+
+    try {
+      const res = await BackupService.importFullBackup(file);
+      setBackupSuccess(
+        `🎉 กู้คืนข้อมูลสำเร็จ! กู้คืนได้ ${res.subjectCount} วิชา และทะเบียนกลาง ${res.rosterCount} ระดับชั้น ระบบจะรีโหลดเพื่อแสดงข้อมูลล่าสุด...`
+      );
+      setTimeout(() => {
+        window.location.reload();
+      }, 2000);
+    } catch (err) {
+      setBackupError(err.message || 'เกิดข้อผิดพลาดในการกู้คืนข้อมูล');
+    } finally {
+      setRestoring(false);
+      if (backupFileInputRef.current) backupFileInputRef.current.value = '';
+    }
+  };
 
   // Subject Update Handlers
   const handleUpdateScore = (studentId, assignmentId, score) => {
@@ -202,7 +260,8 @@ export const TeacherWorkspace = ({
     roster: '👥 รายชื่อนักเรียนในวิชานี้',
     masterRoster: '🏫 ทะเบียนนักเรียนแยกตามระดับชั้น (คลังรายชื่อกลาง)',
     tools: '🎡 เครื่องมือเสริมในห้องเรียน',
-    reports: '📊 ส่งออก ปพ.5 & รายงานทางการ'
+    reports: '📊 ส่งออก ปพ.5 & รายงานทางการ',
+    backup: '💾 สำรองและกู้คืนระบบ (1-Click JSON Backup)'
   };
 
   return (
@@ -419,9 +478,17 @@ export const TeacherWorkspace = ({
 
                           <button
                             type="button"
-                            onClick={(e) => {
+                            onClick={async (e) => {
                               e.stopPropagation();
-                              if (confirm(`ยืนยันการลบวิชา "${subj.name}" ใช่หรือไม่?`)) {
+                              const ok = await confirmDialog({
+                                title: 'ยืนยันการลบรายวิชา',
+                                message: `คุณครูต้องการลบวิชา "${subj.name}" ใช่หรือไม่?`,
+                                detail: '⚠️ ข้อมูลคะแนน ชิ้นงาน และนักเรียนในวิชานี้จะถูกลบอย่างถาวร',
+                                type: 'danger',
+                                confirmText: 'ใช่, ลบวิชานี้',
+                                cancelText: 'ยกเลิก'
+                              });
+                              if (ok) {
                                 onDeleteSubject(subj.id);
                               }
                             }}
@@ -564,6 +631,7 @@ export const TeacherWorkspace = ({
                 subject={activeSubject}
                 onUpdateStudents={handleUpdateStudents}
                 onAddStudent={handleAddStudent}
+                onSaveSubject={onSaveSubject}
               />
             </div>
           )}
@@ -687,6 +755,157 @@ export const TeacherWorkspace = ({
               </div>
             </div>
           )}
+
+          {/* ========================================================
+             MENU: FULL SYSTEM BACKUP & RESTORE (1-Click JSON Backup)
+             ======================================================== */}
+          {activeMenu === 'backup' && (
+            <div className="space-y-6 animate-pop pb-12">
+              {/* Header card */}
+              <div className="glass-panel rounded-3xl p-6 sm:p-7 border border-slate-800 shadow-2xl relative overflow-hidden bg-gradient-to-br from-slate-900 via-indigo-950/40 to-slate-900">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                  <div className="flex items-center gap-4">
+                    <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-cyan-500 via-indigo-500 to-amber-400 p-0.5 shadow-xl shadow-indigo-600/30 flex items-center justify-center">
+                      <div className="w-full h-full bg-slate-900 rounded-[14px] flex items-center justify-center text-amber-300">
+                        <Database className="w-7 h-7" />
+                      </div>
+                    </div>
+                    <div>
+                      <div className="inline-flex items-center gap-2 px-3 py-0.5 rounded-full bg-indigo-950/80 border border-indigo-500/40 text-indigo-300 text-xs font-semibold mb-1">
+                        <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>KruSos SafeData 2.0 • สำรองฐานข้อมูล 1 คลิก</span>
+                      </div>
+                      <h2 className="text-xl sm:text-2xl font-black text-white">
+                        สำรองและย้ายข้อมูลทั้งระบบ (Backup & Restore)
+                      </h2>
+                      <p className="text-xs text-slate-400 mt-1 max-w-2xl leading-relaxed">
+                        บันทึกข้อมูลทุกรายวิชา คะแนนสอบ คะแนนเก็บ ทะเบียนนักเรียนทุกชั้นเรียน (ป.1 - ป.6) และเหรียญเกียรติยศลงในไฟล์ .json ไฟล์เดียว เพื่อเก็บสำรองข้อมูลกันสูญหาย หรือย้ายไปใช้งานบนโน้ตบุ๊กเครื่องอื่นได้ทันที
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Status Messages */}
+                {backupSuccess && (
+                  <div className="mt-4 p-4 rounded-2xl bg-emerald-950/80 border border-emerald-500/60 text-emerald-200 text-xs font-bold flex items-center gap-3 animate-pop">
+                    <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+                    <span>{backupSuccess}</span>
+                  </div>
+                )}
+
+                {backupError && (
+                  <div className="mt-4 p-4 rounded-2xl bg-rose-950/80 border border-rose-500/60 text-rose-200 text-xs font-bold flex items-center gap-3 animate-pop">
+                    <AlertCircle className="w-5 h-5 text-rose-400 shrink-0" />
+                    <span>{backupError}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Action Cards Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* 1. Export Card */}
+                <div className="glass-card rounded-3xl p-6 sm:p-7 border border-emerald-500/30 bg-gradient-to-br from-emerald-950/20 via-slate-900 to-slate-900 shadow-xl flex flex-col justify-between space-y-6">
+                  <div className="space-y-3">
+                    <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shadow-md">
+                      <Download className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-black text-white">
+                        ดาวน์โหลดไฟล์สำรองข้อมูล (.json)
+                      </h3>
+                      <p className="text-xs text-slate-400 mt-1 leading-relaxed">
+                        ส่งออกข้อมูลทั้งหมดเป็นไฟล์ JSON กะทัดรัด ครอบคลุม:
+                      </p>
+                    </div>
+
+                    <ul className="space-y-1.5 text-xs text-slate-300 pt-1">
+                      <li className="flex items-center gap-2">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                        <span>รายวิชาทั้งหมด ({totalSubjects} วิชา) และนักเรียนในแต่ละวิชา</span>
+                      </li>
+                      <li className="flex items-center gap-2">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                        <span>คะแนนเก็บ คะแนนสอบกลางภาค/ปลายภาค และผลการประเมิน สพฐ.</span>
+                      </li>
+                      <li className="flex items-center gap-2">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                        <span>ทะเบียนนักเรียนกลางแยกตามระดับชั้น (ป.1 - ป.6)</span>
+                      </li>
+                      <li className="flex items-center gap-2">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                        <span>เหรียญเกียรติยศและตราความดีของนักเรียนทุกคน</span>
+                      </li>
+                    </ul>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleExportBackup}
+                    className="w-full py-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-sm flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/30 active:scale-95 transition-all"
+                  >
+                    <Download className="w-4 h-4" />
+                    <span>ดาวน์โหลดไฟล์สำรองทันที</span>
+                  </button>
+                </div>
+
+                {/* 2. Import Card */}
+                <div className="glass-card rounded-3xl p-6 sm:p-7 border border-indigo-500/30 bg-gradient-to-br from-indigo-950/20 via-slate-900 to-slate-900 shadow-xl flex flex-col justify-between space-y-6">
+                  <div className="space-y-3">
+                    <div className="w-12 h-12 rounded-2xl bg-indigo-500/20 border border-indigo-500/40 flex items-center justify-center text-indigo-400 shadow-md">
+                      <Upload className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-black text-white">
+                        กู้คืน / นำเข้าไฟล์สำรองข้อมูล
+                      </h3>
+                      <p className="text-xs text-slate-400 mt-1 leading-relaxed">
+                        เลือกไฟล์ <code>.json</code> ที่เคยสำรองไว้เพื่อนำข้อมูลกลับมาใช้ใหม่ หรือย้ายมาจากเครื่องคอมพิวเตอร์อื่น
+                      </p>
+                    </div>
+
+                    <div className="p-3.5 rounded-2xl bg-amber-950/40 border border-amber-500/40 text-xs text-amber-200 space-y-1">
+                      <div className="font-bold flex items-center gap-1.5 text-amber-300">
+                        <AlertCircle className="w-4 h-4 shrink-0" />
+                        <span>ข้อควรทราบก่อนกู้คืนข้อมูล</span>
+                      </div>
+                      <p className="text-[11px] text-amber-300/80 leading-relaxed">
+                        ข้อมูลรายวิชาและทะเบียนนักเรียนในเครื่องปัจจุบันจะถูกแทนที่ด้วยข้อมูลจากไฟล์สำรองที่ท่านเลือก กรุณาตรวจสอบให้แน่ใจว่าเป็นไฟล์สำรองที่ถูกต้อง
+                      </p>
+                    </div>
+                  </div>
+
+                  <div>
+                    <input
+                      type="file"
+                      ref={backupFileInputRef}
+                      accept=".json"
+                      onChange={handleImportBackup}
+                      className="hidden"
+                    />
+
+                    <button
+                      type="button"
+                      disabled={restoring}
+                      onClick={() => backupFileInputRef.current?.click()}
+                      className="w-full py-3.5 rounded-2xl bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-800 text-white font-black text-sm flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/30 active:scale-95 transition-all"
+                    >
+                      {restoring ? (
+                        <>
+                          <RefreshCw className="w-4 h-4 animate-spin" />
+                          <span>กำลังกู้คืนข้อมูล...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Upload className="w-4 h-4" />
+                          <span>เลือกไฟล์ .json เพื่อกู้คืน</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </main>
       </div>
 
@@ -703,9 +922,14 @@ export const TeacherWorkspace = ({
         <CameraScanner
           isOpen={showScanner}
           onClose={() => setShowScanner(false)}
-          onScanSuccess={(code) => {
+          onScanSuccess={async (code) => {
             setShowScanner(false);
-            alert(`📷 สแกนพบข้อมูล: ${code}\nคุณครูสามารถให้คะแนนในสมุดคะแนนได้ทันที`);
+            await alertDialog({
+              title: 'สแกน QR Code สำเร็จ',
+              message: `สแกนพบข้อมูล: ${code}`,
+              detail: 'คุณครูสามารถนำข้อมูลนี้ไปบันทึกคะแนนหรือเช็คชื่อในระบบได้ทันที',
+              type: 'success'
+            });
           }}
         />
       )}

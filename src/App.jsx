@@ -7,6 +7,7 @@ import { SubjectStore } from './services/subjectStore';
 import { AdminDashboard } from './pages/AdminPanel/AdminDashboard';
 import { JoinRoom } from './pages/StudentPanel/JoinRoom';
 import { StudentDashboard } from './pages/StudentPanel/StudentDashboard';
+import { ModernDialogContainer } from './components/ModernDialog';
 
 const MainApp = () => {
   const { currentGroup, setCurrentGroup } = useSocket();
@@ -251,6 +252,7 @@ export default function App() {
   return (
     <SocketProvider>
       <MainApp />
+      <ModernDialogContainer />
     </SocketProvider>
   );
 }

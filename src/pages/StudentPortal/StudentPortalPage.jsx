@@ -2,11 +2,13 @@ import React, { useState, useMemo } from 'react';
 import {
   School, LogOut, BookOpen, Award, CheckSquare, Calendar, Trophy,
   Gamepad2, Star, CheckCircle2, AlertCircle, Sparkles, ChevronRight,
-  TrendingUp, Users, ArrowRight
+  TrendingUp, Users, ArrowRight, Lock
 } from 'lucide-react';
 import { StudentCartoonAvatar } from '../../components/StudentCartoonAvatar';
 import { GradeLevelLeaderboard } from '../Leaderboard/GradeLevelLeaderboard';
 import { calculateGrade } from '../../components/ExcelHelper';
+import { AVAILABLE_BADGES } from '../../services/badgeService';
+import { alertDialog } from '../../components/ModernDialog';
 import kruSauceLogo from '../../assets/logo.js';
 
 export const StudentPortalPage = ({
@@ -35,6 +37,9 @@ export const StudentPortalPage = ({
     }
     return enrolledSubjects[0] || null;
   }, [selectedSubjectId, enrolledSubjects, subjects]);
+
+  // Score visibility for current subject (default true if undefined)
+  const isScorePublished = currentSubject?.gradingConfig?.isPublished !== false;
 
   // Aggregate student metrics across enrolled subjects
   const studentMetrics = useMemo(() => {
@@ -80,6 +85,28 @@ export const StudentPortalPage = ({
       totalPeriodBonus
     };
   }, [enrolledSubjects, student.id]);
+
+  // Missing assignments for current subject (Explicit user requirement: เวลานักเรียนดูคะแนนให้แจ้งด้วยว่าขาดงานอะไร)
+  const missingAssignments = useMemo(() => {
+    if (!currentSubject) return [];
+    const assignments = currentSubject.assignments || [];
+    return assignments.filter((a) => {
+      const raw = currentSubject.scores?.[student.id]?.[a.id];
+      return raw === undefined || raw === null || raw === '';
+    });
+  }, [currentSubject, student.id]);
+
+  // Digital badges awarded to this student across subjects
+  const studentBadges = useMemo(() => {
+    const allBadgeIds = new Set();
+    // From current subject
+    (currentSubject?.studentBadges?.[student.id] || []).forEach(id => allBadgeIds.add(id));
+    // Across enrolled subjects
+    enrolledSubjects.forEach((s) => {
+      (s.studentBadges?.[student.id] || []).forEach(id => allBadgeIds.add(id));
+    });
+    return AVAILABLE_BADGES.filter(b => allBadgeIds.has(b.id));
+  }, [currentSubject, enrolledSubjects, student.id]);
 
   // Assignments breakdown for current subject
   const currentSubjectAssignments = useMemo(() => {
@@ -131,13 +158,17 @@ export const StudentPortalPage = ({
     };
   }, [currentSubject, student.id]);
 
-  const handleJoinLive = (e) => {
+  const handleJoinLive = async (e) => {
     e.preventDefault();
     if (!pinCode.trim()) return;
     if (onJoinRoom) {
       onJoinRoom(pinCode.trim().toUpperCase());
     } else {
-      alert(`🎉 เข้าร่วมห้องกิจกรรม PIN: ${pinCode.trim().toUpperCase()}`);
+      await alertDialog({
+        title: 'ห้องกิจกรรมสด',
+        message: `เข้าร่วมห้องกิจกรรม PIN: ${pinCode.trim().toUpperCase()} สำเร็จ!`,
+        type: 'success'
+      });
     }
   };
 
@@ -242,10 +273,10 @@ export const StudentPortalPage = ({
               <div className="bg-slate-950/80 p-3.5 rounded-2xl border border-slate-800 text-center">
                 <div className="text-[11px] font-semibold text-slate-400">ผลการเรียนเฉลี่ย</div>
                 <div className="text-2xl font-black font-mono text-emerald-400 mt-0.5">
-                  เกรด {studentMetrics.overallGrade}
+                  {isScorePublished ? `เกรด ${studentMetrics.overallGrade}` : '🔒 รอประกาศ'}
                 </div>
                 <div className="text-[10px] text-emerald-400 font-bold mt-0.5">
-                  เกณฑ์มาตรฐาน สพฐ.
+                  {isScorePublished ? 'เกณฑ์มาตรฐาน สพฐ.' : 'อยู่ระหว่างประมวลผล'}
                 </div>
               </div>
 
@@ -261,6 +292,59 @@ export const StudentPortalPage = ({
             </div>
           </div>
         </section>
+
+        {/* Digital Badges Showcase (ตู้โชว์เหรียญเกียรติยศ & ตราความดี) */}
+        <div className="glass-panel rounded-3xl p-5 border border-slate-800 bg-gradient-to-r from-slate-900 via-amber-950/20 to-slate-900 shadow-xl space-y-3 animate-pop">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <div className="w-10 h-10 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-xl shadow-md shadow-amber-500/10">
+                🎖️
+              </div>
+              <div>
+                <h3 className="font-extrabold text-sm sm:text-base text-white flex items-center gap-2">
+                  <span>ตู้โชว์เหรียญเกียรติยศ & ตราความดี</span>
+                  <span className="px-2.5 py-0.5 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300 text-[11px] font-mono font-bold">
+                    {studentBadges.length} เหรียญ
+                  </span>
+                </h3>
+                <p className="text-[11px] text-slate-400">
+                  เหรียญตราเชิดชูเกียรติที่ได้รับมอบจากคุณครูซอส
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {studentBadges.length === 0 ? (
+            <div className="p-4 rounded-2xl bg-slate-950/60 border border-dashed border-slate-800 text-center space-y-1">
+              <div className="text-2xl opacity-60">🌟</div>
+              <p className="text-xs text-slate-300 font-semibold">
+                ยังไม่มีเหรียญเกียรติยศในขณะนี้
+              </p>
+              <p className="text-[11px] text-slate-400 max-w-md mx-auto">
+                ตั้งใจเรียน ส่งงานตรงเวลา ช่วยเหลือเพื่อน และร่วมกิจกรรมในห้องเรียน เพื่อพิชิตเหรียญตราความดีจากคุณครูนะ!
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-2.5">
+              {studentBadges.map((b) => (
+                <div
+                  key={b.id}
+                  className="p-3 rounded-2xl bg-slate-950/90 border border-amber-500/40 hover:border-amber-400 shadow-lg shadow-amber-500/5 text-center space-y-1 transition-all hover:scale-105 group cursor-default"
+                >
+                  <div className="text-3xl filter drop-shadow group-hover:scale-110 transition-transform">
+                    {b.icon}
+                  </div>
+                  <div className="font-black text-xs text-amber-300 truncate">
+                    {b.name}
+                  </div>
+                  <div className="text-[9px] text-slate-400 line-clamp-2 leading-tight">
+                    {b.description}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
 
         {/* 2. Navigation Tabs */}
         <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none pb-1 text-xs font-bold border-b border-slate-800">
@@ -368,17 +452,83 @@ export const StudentPortalPage = ({
 
                 <div className="text-right">
                   <div className="text-xs text-slate-400">เกรดวิชานี้</div>
-                  <div className="text-xl font-black font-mono text-emerald-400">
-                    เกรด {calculateGrade(
-                      (currentSubject.assignments || []).reduce((acc, a) => {
-                        const s = currentSubject.scores?.[student.id]?.[a.id];
-                        return acc + (s !== undefined && s !== '' ? parseFloat(s) : 0);
-                      }, 0),
-                      (currentSubject.assignments || []).reduce((acc, a) => acc + (parseFloat(a.maxScore) || 0), 0)
-                    )}
-                  </div>
+                  {isScorePublished ? (
+                    <div className="text-xl font-black font-mono text-emerald-400">
+                      เกรด {calculateGrade(
+                        (currentSubject.assignments || []).reduce((acc, a) => {
+                          const s = currentSubject.scores?.[student.id]?.[a.id];
+                          return acc + (s !== undefined && s !== '' ? parseFloat(s) : 0);
+                        }, 0),
+                        (currentSubject.assignments || []).reduce((acc, a) => acc + (parseFloat(a.maxScore) || 0), 0)
+                      )}
+                    </div>
+                  ) : (
+                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-amber-950/80 border border-amber-500/50 text-amber-300 font-bold text-xs mt-1">
+                      <Lock className="w-3.5 h-3.5" />
+                      <span>รอประกาศผล</span>
+                    </div>
+                  )}
                 </div>
               </div>
+
+              {/* Alert: Missing Assignments (เวลานักเรียนดูคะแนนให้แจ้งด้วยว่าขาดงานอะไร) */}
+              {missingAssignments.length > 0 ? (
+                <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-rose-950/70 via-amber-950/50 to-slate-900 border-2 border-amber-500/60 shadow-xl space-y-3 animate-pop">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-rose-500/20 border border-rose-500/40 flex items-center justify-center text-rose-400 shrink-0">
+                        <AlertCircle className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h4 className="font-black text-sm sm:text-base text-amber-300 flex items-center gap-2">
+                          <span>⚠️ รายการงานและภารกิจที่ยังค้างส่ง ({missingAssignments.length} ชิ้นงาน)</span>
+                        </h4>
+                        <p className="text-xs text-slate-300 mt-0.5">
+                          คุณครูยังไม่พบคะแนนหรือยังไม่ได้รับชิ้นงานด้านล่างนี้ รีบส่งงานเพื่อรักษาเกรดและคะแนนเก็บนะครับ
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 pt-1">
+                    {missingAssignments.map((a) => (
+                      <div
+                        key={a.id}
+                        className="p-3 rounded-xl bg-slate-950/90 border border-amber-500/40 flex items-center justify-between gap-2 shadow-sm hover:border-amber-400 transition-colors"
+                      >
+                        <div className="min-w-0">
+                          <div className="text-[10px] text-amber-400 font-bold">
+                            {a.category || 'ใบงาน'} • เต็ม {a.maxScore} คะแนน
+                          </div>
+                          <div className="font-black text-xs text-white truncate mt-0.5">
+                            {a.title}
+                          </div>
+                        </div>
+                        <span className="px-2.5 py-1 rounded-lg bg-rose-950/80 text-rose-300 border border-rose-600/50 text-[10px] font-extrabold shrink-0">
+                          ค้างส่ง
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (currentSubject.assignments || []).length > 0 ? (
+                <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-950/70 via-slate-900 to-indigo-950/40 border border-emerald-500/50 shadow-xl flex items-center gap-3.5 animate-pop">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-300 shrink-0 text-xl">
+                    🎉
+                  </div>
+                  <div>
+                    <div className="font-black text-sm text-emerald-300 flex items-center gap-2">
+                      <span>สุดยอดมาก! ส่งงานครบทุกชิ้นแล้ว (ไม่มีงานค้าง)</span>
+                      <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[10px] font-bold">
+                        100% Complete
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-300 mt-0.5">
+                      นักเรียนส่งภารกิจและการบ้านครบถ้วนทุกรายการ รักษามาตรฐานยอดเยี่ยมนี้ไว้นะครับ!
+                    </p>
+                  </div>
+                </div>
+              ) : null}
 
               {/* Assignments List Cards */}
               {currentSubjectAssignments.length === 0 ? (

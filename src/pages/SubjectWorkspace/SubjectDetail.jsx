@@ -9,6 +9,7 @@ import { StudentRosterManager } from './StudentRosterManager';
 import { exportComprehensiveExcel } from '../../components/ExcelHelper';
 import { LuckyWheelModal } from '../../components/LuckyWheelModal';
 import { CameraScanner } from '../AdminPanel/CameraScanner';
+import { alertDialog } from '../../components/ModernDialog';
 
 export const SubjectDetail = ({ subject, onBack, onSaveSubject, onOpenLeaderboard }) => {
   const [activeTab, setActiveTab] = useState('gradebook'); // 'gradebook' | 'assignments' | 'attendance' | 'assessments' | 'roster'
@@ -123,9 +124,14 @@ export const SubjectDetail = ({ subject, onBack, onSaveSubject, onOpenLeaderboar
     score: 0
   }));
 
-  const handleScanSuccess = (decodedText) => {
+  const handleScanSuccess = async (decodedText) => {
     setShowScanner(false);
-    alert(`📷 สแกนพบข้อมูล: ${decodedText}\nคุณครูสามารถให้คะแนนในสมุดคะแนนได้ทันที`);
+    await alertDialog({
+      title: 'สแกน QR Code สำเร็จ',
+      message: `สแกนพบข้อมูล: ${decodedText}`,
+      detail: 'คุณครูสามารถนำข้อมูลนี้ไปบันทึกคะแนนในสมุดคะแนนได้ทันที',
+      type: 'success'
+    });
   };
 
   return (
@@ -333,6 +339,7 @@ export const SubjectDetail = ({ subject, onBack, onSaveSubject, onOpenLeaderboar
             onUpdateStudents={handleUpdateStudents}
             onAddStudent={handleAddStudent}
             onDeleteStudent={handleDeleteStudent}
+            onSaveSubject={onSaveSubject}
           />
         )}
       </main>
