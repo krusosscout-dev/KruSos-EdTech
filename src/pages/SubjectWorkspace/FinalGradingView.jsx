@@ -4,7 +4,7 @@ import {
   TrendingUp, Users, Sparkles, BarChart2, FileText, Settings,
   Plus, Trash2, Edit3, Sliders, Check, Calculator, Percent,
   Layers, X, HelpCircle, ArrowRight, RotateCcw, ShieldCheck,
-  ChevronDown, BookOpen
+  ChevronDown, BookOpen, CheckSquare, Square
 } from 'lucide-react';
 import { calculateGrade, exportComprehensiveExcel } from '../../components/ExcelHelper';
 import { ScoreWheelInput } from '../../components/ScoreWheelInput';
@@ -22,76 +22,139 @@ export const FinalGradingView = ({
   const [showAddExamModal, setShowAddExamModal] = useState(false);
   const [editingExamId, setEditingExamId] = useState(null);
 
+  // Formative Section Modal State (สำหรับเพิ่ม/แจงหมวดคะแนนเก็บ เช่น 30, 20, 20)
+  const [showAddFormativeModal, setShowAddFormativeModal] = useState(false);
+  const [editingFormativeId, setEditingFormativeId] = useState(null);
+  const [formativeFormTitle, setFormativeFormTitle] = useState('');
+  const [formativeFormWeight, setFormativeFormWeight] = useState(20);
+  const [formativeFormSelectedAsgs, setFormativeFormSelectedAsgs] = useState([]);
+
   // Add/Edit Exam Form State
   const [examFormTitle, setExamFormTitle] = useState('');
-  const [examFormCategory, setExamFormCategory] = useState('สอบกลางภาค');
-  const [examFormMaxScore, setExamFormMaxScore] = useState(10);
+  const [examFormCategory, setExamFormCategory] = useState('สอบปลายภาค');
+  const [examFormMaxScore, setExamFormMaxScore] = useState(30);
 
   const safeSubject = subject || {};
   const { students = [], assignments = [], scores = {} } = safeSubject;
 
-  // Default grading configuration (Standard 100-point Thai Education System: 70 Formative + 10 Midterm + 20 Final = 100)
+  // Default grading configuration matching Thai school 100-point structure (70 Formative: 30 + 20 + 20, and 30 Final Exam = 100)
   const defaultGradingConfig = useMemo(() => {
+    // If subject has assignments, distribute them intelligently
+    const asgCount = assignments.length;
+    let sec1Asgs = [];
+    let sec2Asgs = [];
+    let sec3Asgs = [];
+
+    if (asgCount > 0) {
+      const p1 = Math.ceil(asgCount / 3);
+      const p2 = Math.ceil((asgCount * 2) / 3);
+      sec1Asgs = assignments.slice(0, p1).map((a) => a.id);
+      sec2Asgs = assignments.slice(p1, p2).map((a) => a.id);
+      sec3Asgs = assignments.slice(p2).map((a) => a.id);
+    }
+
     return {
-      formativeWeight: 70, // น้ำหนักคะแนนเก็บเต็ม 70
-      calculationMode: 'scale_to_weight', // 'scale_to_weight' | 'divide_by' | 'direct_sum'
-      divisor: 1, // ตัวหาร (ใช้เมื่อเลือก divide_by)
-      selectedAssignmentIds: assignments.map((a) => a.id), // ดึงทุกช่องคะแนนเก็บเป็นค่าเริ่มต้น
+      // แจงคะแนนเก็บเป็นช่องๆ เช่น 30, 20, 20 รวมเป็น 70 แต้ม
+      formativeSections: [
+        {
+          id: 'sec_formative_1',
+          title: 'คะแนนเก็บส่วนที่ 1 (ก่อนกลางภาค)',
+          weight: 30,
+          calculationMode: 'scale_to_weight',
+          selectedAssignmentIds: sec1Asgs
+        },
+        {
+          id: 'sec_formative_2',
+          title: 'คะแนนเก็บส่วนที่ 2 (หลังกลางภาค)',
+          weight: 20,
+          calculationMode: 'scale_to_weight',
+          selectedAssignmentIds: sec2Asgs
+        },
+        {
+          id: 'sec_formative_3',
+          title: 'คะแนนชิ้นงาน/โครงงาน',
+          weight: 20,
+          calculationMode: 'scale_to_weight',
+          selectedAssignmentIds: sec3Asgs
+        }
+      ],
+      // คะแนนสอบ เช่น สอบปลายภาค 30 แต้ม
       examColumns: [
-        { id: 'exam_midterm', title: 'สอบกลางภาค', maxScore: 10, category: 'สอบกลางภาค' },
-        { id: 'exam_final', title: 'สอบปลายภาค', maxScore: 20, category: 'สอบปลายภาค' }
+        {
+          id: 'exam_final',
+          title: 'สอบปลายภาค',
+          maxScore: 30,
+          category: 'สอบปลายภาค'
+        }
       ]
     };
   }, [assignments]);
 
-  // Active grading configuration from subject or default
-  const config = safeSubject.gradingConfig || defaultGradingConfig;
-  const {
-    formativeWeight = 70,
-    calculationMode = 'scale_to_weight',
-    divisor = 1,
-    selectedAssignmentIds = assignments.map((a) => a.id),
-    examColumns = [
-      { id: 'exam_midterm', title: 'สอบกลางภาค', maxScore: 10, category: 'สอบกลางภาค' },
-      { id: 'exam_final', title: 'สอบปลายภาค', maxScore: 20, category: 'สอบปลายภาค' }
-    ]
-  } = config;
+  // Read config from subject or use default (with auto-migration from legacy single formative weight)
+  const config = useMemo(() => {
+    const raw = safeSubject.gradingConfig;
+    if (!raw) return defaultGradingConfig;
 
-  // Selected assignments for formative coursework calculation
-  const selectedAssignments = useMemo(() => {
-    return assignments.filter((a) => selectedAssignmentIds.includes(a.id));
-  }, [assignments, selectedAssignmentIds]);
-
-  // Total raw max score of selected assignments
-  const selectedRawMaxScore = useMemo(() => {
-    return selectedAssignments.reduce((acc, a) => acc + (parseFloat(a.maxScore) || 0), 0);
-  }, [selectedAssignments]);
-
-  // Effective formative max score based on selected mode
-  const effectiveFormativeMax = useMemo(() => {
-    if (calculationMode === 'scale_to_weight') {
-      return parseFloat(formativeWeight) || 70;
+    // If legacy single formativeWeight exists without formativeSections
+    if (!raw.formativeSections && raw.formativeWeight !== undefined) {
+      const fWeight = parseFloat(raw.formativeWeight) || 70;
+      const w1 = Math.round(fWeight * 0.43); // approx 30
+      const w2 = Math.round(fWeight * 0.285); // approx 20
+      const w3 = fWeight - w1 - w2; // approx 20
+      return {
+        formativeSections: [
+          {
+            id: 'sec_formative_1',
+            title: 'คะแนนเก็บส่วนที่ 1',
+            weight: w1,
+            calculationMode: raw.calculationMode || 'scale_to_weight',
+            selectedAssignmentIds: raw.selectedAssignmentIds || []
+          },
+          {
+            id: 'sec_formative_2',
+            title: 'คะแนนเก็บส่วนที่ 2',
+            weight: w2,
+            calculationMode: 'scale_to_weight',
+            selectedAssignmentIds: []
+          },
+          {
+            id: 'sec_formative_3',
+            title: 'คะแนนเก็บส่วนที่ 3',
+            weight: w3,
+            calculationMode: 'scale_to_weight',
+            selectedAssignmentIds: []
+          }
+        ],
+        examColumns: raw.examColumns || defaultGradingConfig.examColumns
+      };
     }
-    if (calculationMode === 'divide_by') {
-      const d = parseFloat(divisor) || 1;
-      return d > 0 ? selectedRawMaxScore / d : selectedRawMaxScore;
-    }
-    return selectedRawMaxScore; // direct_sum
-  }, [calculationMode, formativeWeight, divisor, selectedRawMaxScore]);
 
-  // Total max score of all exam columns
+    return {
+      formativeSections: raw.formativeSections || defaultGradingConfig.formativeSections,
+      examColumns: raw.examColumns || defaultGradingConfig.examColumns
+    };
+  }, [safeSubject.gradingConfig, defaultGradingConfig]);
+
+  const { formativeSections = [], examColumns = [] } = config;
+
+  // Total Formative Weight (e.g. 30 + 20 + 20 = 70)
+  const totalFormativeWeight = useMemo(() => {
+    return formativeSections.reduce((acc, sec) => acc + (parseFloat(sec.weight) || 0), 0);
+  }, [formativeSections]);
+
+  // Total Exam Max Score (e.g. 30)
   const totalExamMaxScore = useMemo(() => {
     return examColumns.reduce((acc, col) => acc + (parseFloat(col.maxScore) || 0), 0);
   }, [examColumns]);
 
-  // Total overall scale (Must be 100)
+  // Grand Total Score (Must be 100)
   const totalCalculatedMax = useMemo(() => {
-    return Math.round((effectiveFormativeMax + totalExamMaxScore) * 10) / 10;
-  }, [effectiveFormativeMax, totalExamMaxScore]);
+    return Math.round((totalFormativeWeight + totalExamMaxScore) * 10) / 10;
+  }, [totalFormativeWeight, totalExamMaxScore]);
 
   const isExact100 = Math.abs(totalCalculatedMax - 100) < 0.05;
 
-  // Save updated grading configuration to subject
+  // Save updated config to subject
   const handleSaveConfig = (newConfig) => {
     if (onSaveSubject && safeSubject.id) {
       onSaveSubject({
@@ -101,15 +164,81 @@ export const FinalGradingView = ({
     }
   };
 
-  // Quick auto-balance to 100 points
+  // Auto-balance formula to 100 points
   const handleAutoBalance100 = () => {
-    const remainingForFormative = Math.max(0, 100 - totalExamMaxScore);
-    const newConfig = {
+    const diff = 100 - totalCalculatedMax;
+    if (formativeSections.length > 0) {
+      // Adjust the last formative section
+      const updated = [...formativeSections];
+      const last = updated[updated.length - 1];
+      const newWeight = Math.max(1, (parseFloat(last.weight) || 0) + diff);
+      updated[updated.length - 1] = { ...last, weight: newWeight };
+      handleSaveConfig({
+        ...config,
+        formativeSections: updated
+      });
+    }
+  };
+
+  // Open modal to add or edit a formative section
+  const handleOpenFormativeModal = (sec = null) => {
+    if (sec) {
+      setEditingFormativeId(sec.id);
+      setFormativeFormTitle(sec.title);
+      setFormativeFormWeight(sec.weight);
+      setFormativeFormSelectedAsgs(sec.selectedAssignmentIds || []);
+    } else {
+      setEditingFormativeId(null);
+      setFormativeFormTitle(`คะแนนเก็บส่วนที่ ${formativeSections.length + 1}`);
+      setFormativeFormWeight(20);
+      setFormativeFormSelectedAsgs([]);
+    }
+    setShowAddFormativeModal(true);
+  };
+
+  // Submit add or edit formative section
+  const handleSubmitFormativeSection = (e) => {
+    e.preventDefault();
+    if (!formativeFormTitle.trim()) return;
+
+    let updatedSections = [...formativeSections];
+    if (editingFormativeId) {
+      updatedSections = updatedSections.map((sec) =>
+        sec.id === editingFormativeId
+          ? {
+              ...sec,
+              title: formativeFormTitle.trim(),
+              weight: parseFloat(formativeFormWeight) || 10,
+              selectedAssignmentIds: formativeFormSelectedAsgs
+            }
+          : sec
+      );
+    } else {
+      const newSec = {
+        id: `sec_formative_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        title: formativeFormTitle.trim(),
+        weight: parseFloat(formativeFormWeight) || 10,
+        calculationMode: 'scale_to_weight',
+        selectedAssignmentIds: formativeFormSelectedAsgs
+      };
+      updatedSections.push(newSec);
+    }
+
+    handleSaveConfig({
       ...config,
-      calculationMode: 'scale_to_weight',
-      formativeWeight: remainingForFormative
-    };
-    handleSaveConfig(newConfig);
+      formativeSections: updatedSections
+    });
+    setShowAddFormativeModal(false);
+  };
+
+  // Delete a formative section
+  const handleDeleteFormativeSection = (secId) => {
+    if (!window.confirm('คุณครูต้องการลบหมวดคะแนนเก็บนี้ใช่หรือไม่?')) return;
+    const updated = formativeSections.filter((s) => s.id !== secId);
+    handleSaveConfig({
+      ...config,
+      formativeSections: updated
+    });
   };
 
   // Open modal to add or edit exam column
@@ -122,8 +251,8 @@ export const FinalGradingView = ({
     } else {
       setEditingExamId(null);
       setExamFormTitle(`คะแนนสอบ ${examColumns.length + 1}`);
-      setExamFormCategory('สอบย่อย/ปลายภาค');
-      setExamFormMaxScore(20);
+      setExamFormCategory('สอบปลายภาค');
+      setExamFormMaxScore(30);
     }
     setShowAddExamModal(true);
   };
@@ -155,61 +284,33 @@ export const FinalGradingView = ({
       updatedExams.push(newExam);
     }
 
-    const newConfig = {
+    handleSaveConfig({
       ...config,
       examColumns: updatedExams
-    };
-    handleSaveConfig(newConfig);
+    });
     setShowAddExamModal(false);
   };
 
   // Delete an exam column
   const handleDeleteExamColumn = (colId) => {
-    if (!window.confirm('คุณครูต้องการลบช่องคะแนนสอบนี้ใช่หรือไม่? (คะแนนที่กรอกไว้ในช่องนี้จะถูกนำออกจากการคำนวณตัดเกรด)')) {
-      return;
-    }
+    if (!window.confirm('คุณครูต้องการลบช่องคะแนนสอบนี้ใช่หรือไม่?')) return;
     const updatedExams = examColumns.filter((col) => col.id !== colId);
-    const newConfig = {
+    handleSaveConfig({
       ...config,
       examColumns: updatedExams
-    };
-    handleSaveConfig(newConfig);
+    });
   };
 
-  // Toggle selection of an assignment for formative score calculation
-  const handleToggleAssignment = (asgId) => {
-    let currentSelected = [...selectedAssignmentIds];
-    if (currentSelected.includes(asgId)) {
-      currentSelected = currentSelected.filter((id) => id !== asgId);
-    } else {
-      currentSelected.push(asgId);
-    }
-    const newConfig = {
-      ...config,
-      selectedAssignmentIds: currentSelected
-    };
-    handleSaveConfig(newConfig);
-  };
-
-  // Select all or deselect all assignments
-  const handleSelectAllAssignments = (select) => {
-    const newConfig = {
-      ...config,
-      selectedAssignmentIds: select ? assignments.map((a) => a.id) : []
-    };
-    handleSaveConfig(newConfig);
-  };
-
-  // Handle score change for an exam column using ScoreWheelInput or typing
-  const handleExamScoreChange = (studentId, examColId, newScore) => {
+  // Score update handler for an editable column (direct entry or exam)
+  const handleDirectScoreChange = (studentId, colId, newScore) => {
     if (onUpdateScore) {
-      onUpdateScore(studentId, examColId, newScore);
+      onUpdateScore(studentId, colId, newScore);
     } else if (onSaveSubject) {
       const updatedScores = {
         ...scores,
         [studentId]: {
           ...(scores[studentId] || {}),
-          [examColId]: newScore
+          [colId]: newScore
         }
       };
       onSaveSubject({
@@ -219,16 +320,16 @@ export const FinalGradingView = ({
     }
   };
 
-  // Quick fill full score for an exam column
-  const handleQuickFillExam = (examCol) => {
-    if (!window.confirm(`ต้องการกรอกคะแนนเต็ม (${examCol.maxScore} แต้ม) ในช่อง "${examCol.title}" ให้กับนักเรียนทุกคนใช่หรือไม่?`)) {
+  // Quick fill full score for an exam/column
+  const handleQuickFill = (colId, maxScore, title) => {
+    if (!window.confirm(`ต้องการกรอกคะแนนเต็ม (${maxScore} แต้ม) ในช่อง "${title}" ให้กับนักเรียนทุกคนใช่หรือไม่?`)) {
       return;
     }
     const updatedScores = { ...scores };
     students.forEach((std) => {
       updatedScores[std.id] = {
         ...(updatedScores[std.id] || {}),
-        [examCol.id]: examCol.maxScore
+        [colId]: maxScore
       };
     });
     if (onSaveSubject) {
@@ -239,52 +340,66 @@ export const FinalGradingView = ({
     }
   };
 
-  // Compute student final grading results
+  // Calculate detailed student results
   const studentResults = useMemo(() => {
     return students.map((std) => {
-      // 1. Compute Formative Raw Score from selected assignments
-      let rawFormative = 0;
-      selectedAssignments.forEach((a) => {
-        const val = scores[std.id]?.[a.id];
-        if (val !== undefined && val !== '') {
-          rawFormative += parseFloat(val) || 0;
+      let netFinalScore = 0;
+      const sectionScores = {};
+
+      // 1. Compute each Formative Section score
+      formativeSections.forEach((sec) => {
+        const selectedIds = sec.selectedAssignmentIds || [];
+        if (selectedIds.length > 0) {
+          // Compute from selected Gradebook assignments
+          const linkedAsgs = assignments.filter((a) => selectedIds.includes(a.id));
+          const rawMax = linkedAsgs.reduce((acc, a) => acc + (parseFloat(a.maxScore) || 0), 0);
+          let rawGot = 0;
+          linkedAsgs.forEach((a) => {
+            const v = scores[std.id]?.[a.id];
+            if (v !== undefined && v !== '') rawGot += parseFloat(v) || 0;
+          });
+
+          // Scale to section weight
+          const targetWeight = parseFloat(sec.weight) || 10;
+          let calculated = rawMax > 0 ? (rawGot / rawMax) * targetWeight : 0;
+          calculated = Math.round(calculated * 10) / 10;
+
+          sectionScores[sec.id] = {
+            calculated,
+            rawGot,
+            rawMax,
+            isLinked: true
+          };
+          netFinalScore += calculated;
+        } else {
+          // Direct entry formative column
+          const directVal = scores[std.id]?.[sec.id];
+          const num = directVal !== undefined && directVal !== '' ? parseFloat(directVal) : 0;
+          sectionScores[sec.id] = {
+            calculated: num,
+            rawGot: num,
+            rawMax: sec.weight,
+            isLinked: false
+          };
+          netFinalScore += num;
         }
       });
 
-      // 2. Calculate Formative Score based on mode
-      let calcFormative = 0;
-      if (calculationMode === 'scale_to_weight') {
-        calcFormative = selectedRawMaxScore > 0 ? (rawFormative / selectedRawMaxScore) * (parseFloat(formativeWeight) || 70) : 0;
-      } else if (calculationMode === 'divide_by') {
-        const d = parseFloat(divisor) || 1;
-        calcFormative = d > 0 ? rawFormative / d : rawFormative;
-      } else {
-        calcFormative = rawFormative; // direct sum
-      }
-      calcFormative = Math.round(calcFormative * 10) / 10;
-
-      // 3. Compute Exam Scores from exam columns
-      let totalExamScore = 0;
-      const studentExamScores = {};
+      // 2. Compute Exam Scores
+      const examScoresMap = {};
       examColumns.forEach((col) => {
         const val = scores[std.id]?.[col.id];
         const num = val !== undefined && val !== '' ? parseFloat(val) : 0;
-        studentExamScores[col.id] = val !== undefined && val !== '' ? num : '';
-        totalExamScore += num;
+        examScoresMap[col.id] = val !== undefined && val !== '' ? num : '';
+        netFinalScore += num;
       });
 
-      // 4. Net Final Score (Sum of Formative + Exams)
-      const rawFinalScore = calcFormative + totalExamScore;
-      
-      // Standardize strictly to 100-base scale for official grading
-      const finalScore100 = totalCalculatedMax > 0 ? (rawFinalScore / totalCalculatedMax) * 100 : 0;
-      const rounded100 = Math.round(finalScore100 * 10) / 10;
-      const netFinalScore = Math.round(rawFinalScore * 10) / 10;
+      netFinalScore = Math.round(netFinalScore * 10) / 10;
 
-      // 5. Official Thai Grade (0 - 4)
+      // 3. Official Thai Grade (0 - 4.0) based on 100 points
       const grade = calculateGrade(netFinalScore, totalCalculatedMax > 0 ? totalCalculatedMax : 100);
 
-      // Qualitative Evaluation Label
+      // Qualitative Evaluation
       let evaluation = 'ผ่าน (ดีเยี่ยม)';
       let evalColor = 'text-emerald-300 bg-emerald-950/80 border-emerald-500/40';
       if (grade === '4' || grade === '3.5') {
@@ -306,12 +421,9 @@ export const FinalGradingView = ({
 
       return {
         ...std,
-        rawFormative,
-        calcFormative,
-        studentExamScores,
-        totalExamScore,
+        sectionScores,
+        examScoresMap,
         netFinalScore,
-        rounded100,
         grade,
         evaluation,
         evalColor
@@ -319,28 +431,25 @@ export const FinalGradingView = ({
     });
   }, [
     students,
-    selectedAssignments,
-    selectedRawMaxScore,
+    assignments,
     scores,
-    calculationMode,
-    formativeWeight,
-    divisor,
+    formativeSections,
     examColumns,
     totalCalculatedMax
   ]);
 
-  // Grade Breakdown Distribution Count
+  // Grade Counts & Stats
   const gradeCounts = { '4': 0, '3.5': 0, '3': 0, '2.5': 0, '2': 0, '1.5': 0, '1': 0, '0': 0 };
-  let sumFinal100 = 0;
+  let sumFinal = 0;
   let passedCount = 0;
 
   studentResults.forEach((r) => {
     if (gradeCounts[r.grade] !== undefined) gradeCounts[r.grade]++;
-    sumFinal100 += r.rounded100;
+    sumFinal += r.netFinalScore;
     if (parseFloat(r.grade) >= 1) passedCount++;
   });
 
-  const avgScore100 = studentResults.length > 0 ? (sumFinal100 / studentResults.length).toFixed(1) : '0.0';
+  const avgScore100 = studentResults.length > 0 ? (sumFinal / studentResults.length).toFixed(1) : '0.0';
   const passRate = studentResults.length > 0 ? ((passedCount / studentResults.length) * 100).toFixed(0) : 0;
 
   // Filtered student results by search query and grade
@@ -366,7 +475,7 @@ export const FinalGradingView = ({
         <div>
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-900/60 border border-indigo-500/40 text-indigo-300 text-xs font-semibold mb-2">
             <Award className="w-3.5 h-3.5" />
-            <span>ระบบคำนวณและตัดเกรดทางการ (ฐานคะแนนเต็ม 100 แต้ม)</span>
+            <span>ระบบสรุปผลการเรียนและตัดเกรด (เกณฑ์ฐาน 100 คะแนน สพฐ.)</span>
           </div>
           <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">
             สรุปผลการเรียนและตัดเกรด: {safeSubject.name}
@@ -381,12 +490,12 @@ export const FinalGradingView = ({
         </div>
 
         <div className="flex items-center gap-2.5 w-full lg:w-auto flex-wrap">
-          {/* Settings Button: Configure weights & select formative assignments */}
+          {/* Configure Formula Button */}
           <button
             type="button"
             onClick={() => setShowConfigModal(true)}
             className="px-4 py-2.5 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-lg shadow-indigo-600/30 flex items-center gap-2 transition-transform active:scale-95"
-            title="ตั้งค่าสัดส่วนคะแนนเก็บ ตัวหาร และดึงช่องคะแนน"
+            title="คลิกเพื่อตั้งค่าและแจงสัดส่วนคะแนนเก็บ เช่น 30, 20, 20 และคะแนนสอบ"
           >
             <Sliders className="w-4 h-4" />
             <span>ตั้งค่าสัดส่วน (100 คะแนน)</span>
@@ -397,7 +506,7 @@ export const FinalGradingView = ({
             type="button"
             onClick={() => handleOpenExamModal()}
             className="px-4 py-2.5 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 hover:opacity-95 text-slate-950 font-black text-xs shadow-lg shadow-amber-500/20 flex items-center gap-2 transition-transform active:scale-95"
-            title="เพิ่มช่องคะแนนสอบกลางภาค/ปลายภาค"
+            title="เพิ่มช่องคะแนนสอบปลายภาค/กลางภาค"
           >
             <Plus className="w-4 h-4" />
             <span>เพิ่มช่องคะแนนสอบ</span>
@@ -427,16 +536,16 @@ export const FinalGradingView = ({
       </div>
 
       {/* ========================================================= */}
-      {/* ⚖️ 2. REAL-TIME 100-POINT FORMULA & WEIGHT STATUS BANNER   */}
+      {/* ⚖️ 2. REAL-TIME 100-POINT FORMULA & BREAKDOWN BANNER       */}
       {/* ========================================================= */}
       <div className={`p-5 rounded-3xl border-2 shadow-xl transition-all ${
         isExact100
           ? 'bg-slate-800/95 border-indigo-500/50 shadow-indigo-950/20'
           : 'bg-amber-950/30 border-amber-500/60 shadow-amber-950/30'
       }`}>
-        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-          <div className="space-y-1.5 flex-1">
-            <div className="flex items-center gap-2">
+        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
+          <div className="space-y-2 flex-1">
+            <div className="flex items-center gap-2 flex-wrap">
               <Calculator className="w-4 h-4 text-indigo-400" />
               <h3 className="text-sm font-bold text-white">
                 โครงสร้างสัดส่วนการตัดเกรด: 100 คะแนน
@@ -454,56 +563,72 @@ export const FinalGradingView = ({
               )}
             </div>
 
-            {/* Formula Breakdown Tags */}
+            {/* Formula Breakdown Tags: Formative Sections (30, 20, 20) + Exams (30) = 100 */}
             <div className="flex items-center gap-2 flex-wrap text-xs font-semibold text-slate-300">
-              {/* Formative Coursework Part */}
-              <div className="px-3 py-1 rounded-xl bg-indigo-950/70 border border-indigo-700/50 flex items-center gap-1.5">
-                <span className="text-indigo-400">📝 คะแนนเก็บสะสม:</span>
-                <span className="font-mono text-amber-300 font-bold">{effectiveFormativeMax} แต้ม</span>
-                <span className="text-[10px] text-slate-400">
-                  (ดึง {selectedAssignments.length}/{assignments.length} ช่อง, ดิบ {selectedRawMaxScore} แต้ม
-                  {calculationMode === 'scale_to_weight' ? ` -> ทอนเต็ม ${formativeWeight}` : calculationMode === 'divide_by' ? ` ÷ ${divisor}` : ''})
-                </span>
-              </div>
+              {/* Formative Header Badge */}
+              <span className="text-indigo-400 font-bold">📝 คะแนนเก็บ ({totalFormativeWeight} แต้ม):</span>
 
-              <span className="text-slate-500 font-bold">+</span>
-
-              {/* Exam Columns Parts */}
-              {examColumns.map((col, idx) => (
-                <React.Fragment key={col.id}>
+              {/* Each Formative Section */}
+              {formativeSections.map((sec, idx) => (
+                <React.Fragment key={sec.id}>
                   {idx > 0 && <span className="text-slate-500 font-bold">+</span>}
-                  <div className="px-3 py-1 rounded-xl bg-amber-950/50 border border-amber-700/50 flex items-center gap-1.5">
-                    <span className="text-amber-300 font-bold">{col.title}:</span>
-                    <span className="font-mono text-white font-bold">{col.maxScore} แต้ม</span>
+                  <div className="px-2.5 py-1 rounded-xl bg-indigo-950/80 border border-indigo-700/50 flex items-center gap-1">
+                    <span className="text-indigo-300">{sec.title}:</span>
+                    <span className="font-mono text-amber-300 font-bold">{sec.weight}</span>
                   </div>
                 </React.Fragment>
               ))}
 
-              <span className="text-slate-500 font-bold">=</span>
+              <span className="text-slate-500 font-bold text-sm">|</span>
 
-              {/* Total Balance */}
+              {/* Exam Header Badge */}
+              <span className="text-amber-400 font-bold">🎯 คะแนนสอบ ({totalExamMaxScore} แต้ม):</span>
+              {examColumns.map((col, idx) => (
+                <React.Fragment key={col.id}>
+                  {idx > 0 && <span className="text-slate-500 font-bold">+</span>}
+                  <div className="px-2.5 py-1 rounded-xl bg-amber-950/60 border border-amber-700/50 flex items-center gap-1">
+                    <span className="text-amber-300">{col.title}:</span>
+                    <span className="font-mono text-white font-bold">{col.maxScore}</span>
+                  </div>
+                </React.Fragment>
+              ))}
+
+              <span className="text-slate-500 font-bold text-sm">=</span>
+
+              {/* Grand Total */}
               <div className={`px-3 py-1 rounded-xl font-mono font-black text-sm border ${
                 isExact100
                   ? 'bg-emerald-950/70 border-emerald-500 text-emerald-300'
                   : 'bg-rose-950/70 border-rose-500 text-rose-300'
               }`}>
-                {totalCalculatedMax} / 100
+                รวม {totalCalculatedMax} / 100
               </div>
             </div>
           </div>
 
-          {/* Quick Adjustment Button if not 100 */}
-          {!isExact100 && (
+          {/* Action Buttons */}
+          <div className="flex items-center gap-2 shrink-0">
+            {!isExact100 && (
+              <button
+                type="button"
+                onClick={handleAutoBalance100}
+                className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow flex items-center gap-1.5 transition-transform active:scale-95"
+                title="ปรับคะแนนเก็บให้ครบ 100 คะแนนอัตโนมัติ"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                <span>ปรับให้ครบ 100 ทันที</span>
+              </button>
+            )}
+
             <button
               type="button"
-              onClick={handleAutoBalance100}
-              className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow flex items-center gap-1.5 shrink-0 transition-transform active:scale-95"
-              title="ปรับคะแนนเก็บให้ครบ 100 คะแนนอัตโนมัติ"
+              onClick={() => setShowConfigModal(true)}
+              className="px-3 py-2 rounded-xl bg-slate-750 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-600 text-xs font-bold flex items-center gap-1.5"
             >
-              <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-              <span>ปรับคะแนนให้ครบ 100 ทันที</span>
+              <Edit3 className="w-3.5 h-3.5" />
+              <span>แก้ไขการแจงคะแนน</span>
             </button>
-          )}
+          </div>
         </div>
       </div>
 
@@ -599,7 +724,7 @@ export const FinalGradingView = ({
       {/* 📋 5. INTERACTIVE 100-POINT FINAL GRADING TABLE            */}
       {/* ========================================================= */}
       <div className="bg-slate-800 rounded-3xl border-2 border-slate-700 shadow-2xl overflow-hidden space-y-4 p-5">
-        {/* Table Search & Helper Bar */}
+        {/* Search & Help Bar */}
         <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
           <div className="relative w-full sm:w-80">
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -614,7 +739,7 @@ export const FinalGradingView = ({
 
           <div className="flex items-center gap-3 text-xs text-slate-300">
             <span className="hidden sm:inline text-slate-400">
-              💡 <strong>ปรับคะแนนสอบ:</strong> เลื่อนลูกกลิ้งเมาส์ (Scroll) หรือพิมพ์ตัวเลขได้ทันที
+              💡 <strong>ปรับคะแนนสอบ/คะแนนกรอกตรง:</strong> เลื่อนลูกกลิ้งเมาส์ (Scroll) หรือพิมพ์ตัวเลขได้ทันที
             </span>
             <span>
               แสดงข้อมูล <strong>{filteredResults.length}</strong> จากทั้งหมด {students.length} คน
@@ -627,28 +752,46 @@ export const FinalGradingView = ({
           <table className="w-full text-left text-sm border-collapse">
             <thead>
               <tr className="bg-slate-900 text-slate-200 border-b-2 border-slate-700 font-bold uppercase text-xs">
-                {/* Pinned Number */}
+                {/* Pinned Left: Number */}
                 <th className="p-3.5 w-16 text-center sticky left-0 z-20 bg-slate-900 border-r border-slate-800 shadow-[2px_0_6px_rgba(0,0,0,0.3)]">
                   เลขที่
                 </th>
                 {/* Student Code */}
                 <th className="p-3.5 w-24 text-center">รหัส</th>
-                {/* Pinned Name */}
+                {/* Pinned Left: Name */}
                 <th className="p-3.5 min-w-[190px] sticky left-16 z-20 bg-slate-900 border-r-2 border-slate-700 shadow-[4px_0_10px_rgba(0,0,0,0.35)]">
                   ชื่อ - นามสกุล
                 </th>
 
-                {/* Formative Coursework Column */}
-                <th className="p-3.5 text-center min-w-[130px] bg-indigo-950/60 text-indigo-200 border-r border-slate-800">
-                  <div className="font-bold flex items-center justify-center gap-1">
-                    <span>คะแนนเก็บ</span>
-                  </div>
-                  <div className="text-[10px] text-amber-300 font-mono font-normal mt-0.5">
-                    เต็ม {effectiveFormativeMax} แต้ม
-                  </div>
-                </th>
+                {/* Formative Breakdown Columns (30, 20, 20 etc.) */}
+                {formativeSections.map((sec, sIdx) => (
+                  <th
+                    key={sec.id}
+                    className="p-3 text-center min-w-[130px] max-w-[170px] bg-indigo-950/70 text-indigo-200 border-r border-slate-800 relative group"
+                  >
+                    <div className="flex items-center justify-center gap-1 font-bold text-amber-300 truncate">
+                      <span>{sec.title}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleOpenFormativeModal(sec)}
+                        className="p-0.5 text-slate-400 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                        title="แก้ไขหมวดคะแนนเก็บนี้"
+                      >
+                        <Edit3 className="w-3 h-3" />
+                      </button>
+                    </div>
+                    <div className="text-[10px] text-slate-400 font-mono font-normal mt-0.5">
+                      เต็ม {sec.weight} แต้ม
+                      {sec.selectedAssignmentIds?.length > 0 && (
+                        <span className="text-indigo-400 ml-1">
+                          (ดึง {sec.selectedAssignmentIds.length} ช่อง)
+                        </span>
+                      )}
+                    </div>
+                  </th>
+                ))}
 
-                {/* Dynamic Exam Columns */}
+                {/* Exam Columns (e.g. สอบปลายภาค 30) */}
                 {examColumns.map((col) => (
                   <th
                     key={col.id}
@@ -656,13 +799,12 @@ export const FinalGradingView = ({
                   >
                     <div className="flex items-center justify-center gap-1 font-bold text-amber-300 truncate">
                       <span>{col.title}</span>
-                      {/* Action buttons on header hover */}
                       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button
                           type="button"
                           onClick={() => handleOpenExamModal(col)}
                           className="p-0.5 text-slate-400 hover:text-white"
-                          title="แก้ไขชื่อ/คะแนนเต็มช่องนี้"
+                          title="แก้ไขชื่อ/คะแนนเต็ม"
                         >
                           <Edit3 className="w-3 h-3" />
                         </button>
@@ -680,7 +822,7 @@ export const FinalGradingView = ({
                       <span>เต็ม {col.maxScore} แต้ม</span>
                       <button
                         type="button"
-                        onClick={() => handleQuickFillExam(col)}
+                        onClick={() => handleQuickFill(col.id, col.maxScore, col.title)}
                         className="text-[9px] text-indigo-400 hover:underline font-sans ml-1"
                         title="กรอกเต็มทุกคน"
                       >
@@ -690,7 +832,7 @@ export const FinalGradingView = ({
                   </th>
                 ))}
 
-                {/* Net Total Score (100 Points Base) */}
+                {/* Net Total (100 Points) */}
                 <th className="p-3.5 text-center min-w-[120px] bg-slate-950 text-amber-300 font-black border-r border-slate-800">
                   <div>รวมคะแนน</div>
                   <div className="text-[10px] text-slate-400 font-mono font-normal mt-0.5">
@@ -698,10 +840,10 @@ export const FinalGradingView = ({
                   </div>
                 </th>
 
-                {/* Official Grade */}
+                {/* Grade */}
                 <th className="p-3.5 text-center w-24">ระดับเกรด</th>
 
-                {/* Qualitative Evaluation */}
+                {/* Evaluation */}
                 <th className="p-3.5 text-center min-w-[130px]">ผลการประเมิน</th>
               </tr>
             </thead>
@@ -709,7 +851,7 @@ export const FinalGradingView = ({
             <tbody className="divide-y divide-slate-700/60 font-sans">
               {filteredResults.length === 0 ? (
                 <tr>
-                  <td colSpan={6 + examColumns.length} className="p-8 text-center text-slate-400">
+                  <td colSpan={5 + formativeSections.length + examColumns.length} className="p-8 text-center text-slate-400">
                     ไม่พบข้อมูลนักเรียนที่ตรงกับเงื่อนไขการค้นหา
                   </td>
                 </tr>
@@ -737,19 +879,51 @@ export const FinalGradingView = ({
                         </div>
                       </td>
 
-                      {/* Formative Coursework Score (Calculated) */}
-                      <td className="p-3 text-center bg-indigo-950/20 border-r border-slate-700/80">
-                        <div className="font-mono font-bold text-base text-indigo-200">
-                          {std.calcFormative}
-                        </div>
-                        <div className="text-[10px] text-slate-400 font-mono">
-                          (ดิบ {std.rawFormative}/{selectedRawMaxScore})
-                        </div>
-                      </td>
+                      {/* Formative Breakdown Columns */}
+                      {formativeSections.map((sec) => {
+                        const secData = std.sectionScores[sec.id] || { calculated: 0, isLinked: false };
+                        if (secData.isLinked) {
+                          // Calculated from linked assignments
+                          return (
+                            <td
+                              key={sec.id}
+                              className="p-3 text-center bg-indigo-950/20 border-r border-slate-700/80"
+                            >
+                              <div className="font-mono font-bold text-base text-indigo-200">
+                                {secData.calculated}
+                              </div>
+                              <div className="text-[10px] text-slate-400 font-mono">
+                                (ดิบ {secData.rawGot}/{secData.rawMax})
+                              </div>
+                            </td>
+                          );
+                        } else {
+                          // Direct entry formative column using ScoreWheelInput
+                          return (
+                            <td
+                              key={sec.id}
+                              className="p-2.5 text-center border-r border-slate-700/80"
+                            >
+                              <div className="flex justify-center">
+                                <ScoreWheelInput
+                                  value={secData.calculated}
+                                  maxScore={parseFloat(sec.weight) || 10}
+                                  minScore={0}
+                                  step={parseFloat(sec.weight) <= 10 ? 0.5 : 1}
+                                  onChange={(val) => handleDirectScoreChange(std.id, sec.id, val)}
+                                  placeholder="-"
+                                  className="w-20"
+                                  title={`หมุนลูกกลิ้งเมาส์ หรือพิมพ์คะแนน ${sec.title} (เต็ม ${sec.weight})`}
+                                />
+                              </div>
+                            </td>
+                          );
+                        }
+                      })}
 
-                      {/* Dynamic Exam Columns with Mouse-Wheel Score Adjustment */}
+                      {/* Exam Columns with ScoreWheelInput */}
                       {examColumns.map((col) => {
-                        const currentScore = std.studentExamScores[col.id];
+                        const currentScore = std.examScoresMap[col.id];
                         return (
                           <td
                             key={col.id}
@@ -761,7 +935,7 @@ export const FinalGradingView = ({
                                 maxScore={parseFloat(col.maxScore) || 10}
                                 minScore={0}
                                 step={parseFloat(col.maxScore) <= 10 ? 0.5 : 1}
-                                onChange={(val) => handleExamScoreChange(std.id, col.id, val)}
+                                onChange={(val) => handleDirectScoreChange(std.id, col.id, val)}
                                 placeholder="-"
                                 className="w-20"
                                 title={`หมุนลูกกลิ้งเมาส์ หรือพิมพ์คะแนน ${col.title} (เต็ม ${col.maxScore})`}
@@ -771,7 +945,7 @@ export const FinalGradingView = ({
                         );
                       })}
 
-                      {/* Net Final Score (Large Font, Crisp Gold) */}
+                      {/* Net Total Score (Large Font, Crisp Gold) */}
                       <td className="p-3 text-center font-mono font-black text-xl text-amber-400 bg-slate-950/60 border-r border-slate-800">
                         {std.netFinalScore}
                       </td>
@@ -809,30 +983,31 @@ export const FinalGradingView = ({
           </table>
         </div>
 
-        {/* Grading Scale Footnote */}
+        {/* Footnote */}
         <div className="pt-2 text-xs text-slate-400 border-t border-slate-700/80 flex items-center justify-between flex-wrap gap-2">
           <span>* เกณฑ์การตัดเกรด 8 ระดับตามมาตรฐาน สพฐ.: 80-100 (4), 75-79 (3.5), 70-74 (3), 65-69 (2.5), 60-64 (2), 55-59 (1.5), 50-54 (1), 0-49 (0)</span>
           <span className="text-indigo-300 font-semibold">โรงเรียนวัดบางปูน • ครูซอส EdTech</span>
         </div>
       </div>
 
-      {/* ========================================================= */}
-      {/* ⚙️ MODAL 1: ตั้งค่าสัดส่วนคะแนนตัดเกรด (100 คะแนน)          */}
-      {/* ========================================================= */}
+      {/* ================================================================================= */}
+      {/* ⚙️ MODAL 1: ตั้งค่าสัดส่วนคะแนนตัดเกรด (100 คะแนน) - FIXED RESPONSIVE DIALOG       */}
+      {/* ================================================================================= */}
       {showConfigModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fade-in overflow-y-auto">
-          <div className="bg-slate-850 w-full max-w-2xl rounded-3xl border-2 border-slate-700 shadow-2xl p-6 space-y-6 my-8">
-            <div className="flex items-center justify-between border-b border-slate-700 pb-4">
+        <div className="fixed inset-0 z-50 overflow-hidden bg-slate-950/85 backdrop-blur-md p-3 sm:p-5 flex items-center justify-center animate-fade-in">
+          <div className="bg-slate-850 w-full max-w-3xl max-h-[90vh] rounded-3xl border-2 border-slate-700 shadow-2xl flex flex-col overflow-hidden">
+            {/* 1. FIXED HEADER - ALWAYS VISIBLE AT TOP */}
+            <div className="p-4 sm:p-5 border-b border-slate-700 flex items-center justify-between shrink-0 bg-slate-850 z-10">
               <div className="flex items-center gap-3">
-                <div className="p-2.5 rounded-2xl bg-indigo-600/30 text-indigo-400 border border-indigo-500/40">
-                  <Sliders className="w-6 h-6" />
+                <div className="p-2.5 rounded-2xl bg-indigo-600/30 text-indigo-400 border border-indigo-500/40 shrink-0">
+                  <Sliders className="w-5 h-5 sm:w-6 sm:h-6" />
                 </div>
                 <div>
-                  <h3 className="text-lg font-black text-white">
-                    ตั้งค่าโครงสร้างสัดส่วนคะแนน (100 คะแนน)
+                  <h3 className="text-base sm:text-lg font-black text-white">
+                    ตั้งค่าโครงสร้างสัดส่วนคะแนนตัดเกรด (100 คะแนน)
                   </h3>
                   <p className="text-xs text-slate-400">
-                    กำหนดการดึงคะแนนเก็บ ตัวหาร และสัดส่วนคะแนนสอบปลายภาค
+                    แจงคะแนนเก็บเป็นช่องๆ (เช่น 30, 20, 20) และกำหนดคะแนนสอบให้รวมได้ 100 พอดี
                   </p>
                 </div>
               </div>
@@ -840,173 +1015,279 @@ export const FinalGradingView = ({
               <button
                 type="button"
                 onClick={() => setShowConfigModal(false)}
-                className="p-2 rounded-xl bg-slate-750 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors"
+                className="p-2 rounded-xl bg-slate-750 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors shrink-0 cursor-pointer"
+                title="ปิดหน้าต่าง"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            {/* Current Balance Bar inside modal */}
-            <div className={`p-4 rounded-2xl border flex items-center justify-between ${
-              isExact100
-                ? 'bg-emerald-950/40 border-emerald-500/60 text-emerald-300'
-                : 'bg-rose-950/40 border-rose-500/60 text-rose-300'
-            }`}>
-              <div className="text-xs font-semibold">
-                คะแนนรวมปัจจุบัน: <span className="font-mono font-black text-base">{totalCalculatedMax}</span> / 100 คะแนน
+            {/* 2. SCROLLABLE BODY - SCROLLS SMOOTHLY WITHOUT OVERFLOW */}
+            <div className="p-4 sm:p-6 space-y-6 overflow-y-auto flex-1 scrollbar-thin scrollbar-thumb-slate-700">
+              {/* Balance Summary Banner inside modal */}
+              <div className={`p-4 rounded-2xl border flex items-center justify-between gap-3 ${
+                isExact100
+                  ? 'bg-emerald-950/40 border-emerald-500/60 text-emerald-300'
+                  : 'bg-rose-950/40 border-rose-500/60 text-rose-300'
+              }`}>
+                <div>
+                  <div className="text-xs font-semibold">
+                    คะแนนรวมปัจจุบัน: <span className="font-mono font-black text-base">{totalCalculatedMax}</span> / 100 คะแนน
+                  </div>
+                  <div className="text-[11px] opacity-80 mt-0.5">
+                    คะแนนเก็บ ({totalFormativeWeight}) + คะแนนสอบ ({totalExamMaxScore})
+                  </div>
+                </div>
+
+                {isExact100 ? (
+                  <span className="text-xs font-bold text-emerald-400 flex items-center gap-1 shrink-0">
+                    <CheckCircle2 className="w-4 h-4" /> ครบ 100 คะแนนเป๊ะ
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleAutoBalance100}
+                    className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow shrink-0 transition-transform active:scale-95 cursor-pointer"
+                  >
+                    ⚡ ปรับให้ครบ 100 ทันที
+                  </button>
+                )}
               </div>
-              {isExact100 ? (
-                <span className="text-xs font-bold text-emerald-400 flex items-center gap-1">
-                  <CheckCircle2 className="w-4 h-4" /> ครบ 100 คะแนนเป๊ะ
-                </span>
-              ) : (
-                <button
-                  type="button"
-                  onClick={handleAutoBalance100}
-                  className="px-3 py-1 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-transform active:scale-95"
-                >
-                  ⚡ ปรับให้ครบ 100
-                </button>
-              )}
+
+              {/* Section A: Formative Breakdown (แจงคะแนนเก็บ เช่น 30, 20, 20) */}
+              <div className="bg-slate-800/90 p-5 rounded-2xl border border-slate-700 space-y-4">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div>
+                    <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                      <FileText className="w-4 h-4 text-indigo-400" />
+                      <span>1. ช่องคะแนนเก็บระหว่างเรียน (รวม {totalFormativeWeight} คะแนน)</span>
+                    </h4>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      สามารถแจงเป็นหมวดๆ ได้ เช่น เก็บ 70 = (30 + 20 + 20) พร้อมเลือกงานที่ดึงมารวม
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => handleOpenFormativeModal()}
+                    className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center gap-1.5 shadow"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>เพิ่มหมวดคะแนนเก็บ</span>
+                  </button>
+                </div>
+
+                <div className="space-y-3">
+                  {formativeSections.length === 0 ? (
+                    <div className="p-4 text-center text-xs text-slate-400 bg-slate-900/60 rounded-xl border border-slate-700">
+                      ยังไม่มีหมวดคะแนนเก็บ (กดปุ่ม "+ เพิ่มหมวดคะแนนเก็บ" เพื่อเริ่มต้น)
+                    </div>
+                  ) : (
+                    formativeSections.map((sec, idx) => {
+                      const selectedCount = sec.selectedAssignmentIds?.length || 0;
+                      return (
+                        <div
+                          key={sec.id}
+                          className="p-4 rounded-xl bg-slate-900 border border-slate-700 space-y-2.5"
+                        >
+                          <div className="flex items-center justify-between gap-3 flex-wrap">
+                            <div className="flex items-center gap-2">
+                              <span className="w-2 h-2 rounded-full bg-indigo-400 shrink-0"></span>
+                              <span className="font-bold text-white text-sm">{sec.title}</span>
+                              <span className="text-[11px] text-slate-400">
+                                ({selectedCount > 0 ? `ดึง ${selectedCount} ช่องจากคะแนนเก็บ` : 'กรอกคะแนนเองในตาราง'})
+                              </span>
+                            </div>
+
+                            <div className="flex items-center gap-3">
+                              <span className="font-mono font-black text-amber-300 text-sm">
+                                {sec.weight} คะแนน
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => handleOpenFormativeModal(sec)}
+                                className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors"
+                                title="แก้ไขหมวดคะแนนและเลือกงาน"
+                              >
+                                <Edit3 className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteFormativeSection(sec.id)}
+                                className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-900/50 text-slate-400 hover:text-rose-300 transition-colors"
+                                title="ลบหมวดคะแนนนี้"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Preview of selected assignments in this section */}
+                          {selectedCount > 0 && (
+                            <div className="text-[11px] text-indigo-300/80 bg-indigo-950/40 px-3 py-1.5 rounded-lg border border-indigo-900/50 truncate">
+                              งานที่รวม: {assignments
+                                .filter((a) => sec.selectedAssignmentIds?.includes(a.id))
+                                .map((a) => a.title)
+                                .join(', ')}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+
+              {/* Section B: Exam Columns (เช่น สอบปลายภาค 30) */}
+              <div className="bg-slate-800/90 p-5 rounded-2xl border border-slate-700 space-y-3">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div>
+                    <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                      <Award className="w-4 h-4 text-amber-400" />
+                      <span>2. ช่องคะแนนสอบ (รวม {totalExamMaxScore} คะแนน)</span>
+                    </h4>
+                    <p className="text-xs text-slate-400">
+                      คะแนนสอบปลายภาค หรือกลางภาคที่ใช้ตัดเกรด
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => handleOpenExamModal()}
+                    className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>เพิ่มช่องสอบ</span>
+                  </button>
+                </div>
+
+                <div className="space-y-2">
+                  {examColumns.length === 0 ? (
+                    <div className="p-3 text-center text-xs text-slate-400 bg-slate-900/60 rounded-xl border border-slate-700">
+                      ยังไม่มีช่องคะแนนสอบ (กดปุ่ม "+ เพิ่มช่องสอบ" เช่น สอบปลายภาค 30 แต้ม)
+                    </div>
+                  ) : (
+                    examColumns.map((col) => (
+                      <div
+                        key={col.id}
+                        className="p-3 rounded-xl bg-slate-900 border border-slate-700 flex items-center justify-between gap-3 text-xs"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="w-2 h-2 rounded-full bg-amber-400"></span>
+                          <span className="font-bold text-white">{col.title}</span>
+                          <span className="text-[10px] text-slate-400">({col.category || 'สอบ'})</span>
+                        </div>
+
+                        <div className="flex items-center gap-3">
+                          <span className="font-mono font-black text-amber-300">
+                            {col.maxScore} คะแนน
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenExamModal(col)}
+                            className="p-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors"
+                            title="แก้ไขช่องสอบ"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteExamColumn(col.id)}
+                            className="p-1 rounded-lg bg-slate-800 hover:bg-rose-900/50 text-slate-400 hover:text-rose-300 transition-colors"
+                            title="ลบช่องสอบ"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
             </div>
 
-            {/* Section A: Formative Coursework Formula */}
-            <div className="bg-slate-800/80 p-5 rounded-2xl border border-slate-700 space-y-4">
-              <div className="flex items-center justify-between">
-                <h4 className="text-sm font-bold text-white flex items-center gap-2">
-                  <FileText className="w-4 h-4 text-indigo-400" />
-                  <span>1. วิธีคำนวณคะแนนเก็บระหว่างเรียน (Formative)</span>
-                </h4>
-                <span className="text-xs text-amber-300 font-bold font-mono">
-                  รวมได้ {effectiveFormativeMax} แต้ม
-                </span>
+            {/* 3. FIXED FOOTER - ALWAYS VISIBLE AT BOTTOM */}
+            <div className="p-4 border-t border-slate-700 flex items-center justify-between shrink-0 bg-slate-900/90 z-10">
+              <div className="text-xs text-slate-400">
+                รวมทั้งสิ้น: <strong className="text-white font-mono">{totalCalculatedMax}</strong> / 100 แต้ม
               </div>
 
-              {/* Mode Radio Buttons */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <button
-                  type="button"
-                  onClick={() => {
-                    handleSaveConfig({
-                      ...config,
-                      calculationMode: 'scale_to_weight'
-                    });
-                  }}
-                  className={`p-3 rounded-xl border text-left transition-all ${
-                    calculationMode === 'scale_to_weight'
-                      ? 'bg-indigo-950 border-indigo-500 ring-2 ring-indigo-500/30 text-white'
-                      : 'bg-slate-900 border-slate-700 text-slate-300 hover:border-slate-600'
-                  }`}
-                >
-                  <div className="font-bold text-xs">เทียบสัดส่วน (แนะนำ)</div>
-                  <div className="text-[11px] text-slate-400 mt-1">
-                    ทอนคะแนนเก็บที่เลือกให้เต็มตามน้ำหนักที่ระบุ
-                  </div>
-                </button>
+              <button
+                type="button"
+                onClick={() => setShowConfigModal(false)}
+                className="px-6 py-2.5 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-lg shadow-indigo-600/30 transition-transform active:scale-95 cursor-pointer"
+              >
+                บันทึกและปิดหน้าต่าง
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    handleSaveConfig({
-                      ...config,
-                      calculationMode: 'divide_by'
-                    });
-                  }}
-                  className={`p-3 rounded-xl border text-left transition-all ${
-                    calculationMode === 'divide_by'
-                      ? 'bg-indigo-950 border-indigo-500 ring-2 ring-indigo-500/30 text-white'
-                      : 'bg-slate-900 border-slate-700 text-slate-300 hover:border-slate-600'
-                  }`}
-                >
-                  <div className="font-bold text-xs">หารตัวเลขคงที่</div>
-                  <div className="text-[11px] text-slate-400 mt-1">
-                    รวมคะแนนเก็บแล้วหารด้วยตัวเลข เช่น หาร 2
-                  </div>
-                </button>
+      {/* ================================================================================= */}
+      {/* 📝 MODAL 2: เพิ่ม / แก้ไขหมวดคะแนนเก็บย่อย (เช่น 30, 20, 20)                       */}
+      {/* ================================================================================= */}
+      {showAddFormativeModal && (
+        <div className="fixed inset-0 z-50 overflow-hidden bg-slate-950/85 backdrop-blur-md p-3 sm:p-5 flex items-center justify-center animate-fade-in">
+          <div className="bg-slate-850 w-full max-w-lg max-h-[90vh] rounded-3xl border-2 border-slate-700 shadow-2xl flex flex-col overflow-hidden">
+            <div className="p-4 sm:p-5 border-b border-slate-700 flex items-center justify-between shrink-0 bg-slate-850">
+              <h3 className="text-base font-black text-white flex items-center gap-2">
+                <FileText className="w-5 h-5 text-indigo-400" />
+                <span>{editingFormativeId ? 'แก้ไขหมวดคะแนนเก็บ' : 'เพิ่มหมวดคะแนนเก็บใหม่'}</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowAddFormativeModal(false)}
+                className="p-1.5 rounded-xl bg-slate-750 hover:bg-slate-700 text-slate-400 hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    handleSaveConfig({
-                      ...config,
-                      calculationMode: 'direct_sum'
-                    });
-                  }}
-                  className={`p-3 rounded-xl border text-left transition-all ${
-                    calculationMode === 'direct_sum'
-                      ? 'bg-indigo-950 border-indigo-500 ring-2 ring-indigo-500/30 text-white'
-                      : 'bg-slate-900 border-slate-700 text-slate-300 hover:border-slate-600'
-                  }`}
-                >
-                  <div className="font-bold text-xs">รวมคะแนนจริง</div>
-                  <div className="text-[11px] text-slate-400 mt-1">
-                    รวมคะแนนเก็บตรงๆ ตามคะแนนเต็มดิบ
-                  </div>
-                </button>
+            <form onSubmit={handleSubmitFormativeSection} className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                  ชื่อหมวดคะแนนเก็บ <span className="text-rose-400">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="เช่น คะแนนเก็บส่วนที่ 1, หน่วยที่ 1, ชิ้นงาน..."
+                  value={formativeFormTitle}
+                  onChange={(e) => setFormativeFormTitle(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-600 text-sm text-white outline-none focus:border-indigo-400"
+                />
               </div>
 
-              {/* Mode Parameters */}
-              {calculationMode === 'scale_to_weight' && (
-                <div className="bg-slate-900/80 p-3.5 rounded-xl border border-slate-700/80 flex items-center justify-between gap-3">
-                  <label className="text-xs font-semibold text-slate-300">
-                    กำหนดคะแนนเก็บสุทธิ (น้ำหนักเต็ม):
-                  </label>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="number"
-                      min="0"
-                      max="100"
-                      value={formativeWeight}
-                      onChange={(e) => {
-                        const val = parseFloat(e.target.value) || 0;
-                        handleSaveConfig({
-                          ...config,
-                          formativeWeight: val
-                        });
-                      }}
-                      className="w-24 px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-600 text-sm font-mono font-bold text-amber-300 text-center outline-none focus:border-indigo-400"
-                    />
-                    <span className="text-xs text-slate-400 font-semibold">คะแนน</span>
-                  </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                  คะแนนเต็มหมวดนี้ (สัดส่วน) <span className="text-rose-400">*</span>
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min="1"
+                    max="100"
+                    step="0.5"
+                    required
+                    value={formativeFormWeight}
+                    onChange={(e) => setFormativeFormWeight(e.target.value)}
+                    className="w-32 px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-600 text-sm font-mono font-bold text-amber-300 text-center outline-none focus:border-indigo-400"
+                  />
+                  <span className="text-xs text-slate-400 font-semibold">คะแนน (เช่น 30 หรือ 20)</span>
                 </div>
-              )}
+              </div>
 
-              {calculationMode === 'divide_by' && (
-                <div className="bg-slate-900/80 p-3.5 rounded-xl border border-slate-700/80 flex items-center justify-between gap-3">
-                  <label className="text-xs font-semibold text-slate-300">
-                    หารคะแนนเก็บรวมด้วย:
-                  </label>
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-bold text-slate-400">÷</span>
-                    <input
-                      type="number"
-                      step="0.5"
-                      min="0.1"
-                      value={divisor}
-                      onChange={(e) => {
-                        const val = parseFloat(e.target.value) || 1;
-                        handleSaveConfig({
-                          ...config,
-                          divisor: val
-                        });
-                      }}
-                      className="w-24 px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-600 text-sm font-mono font-bold text-amber-300 text-center outline-none focus:border-indigo-400"
-                    />
-                    <span className="text-xs text-slate-400 font-semibold">เท่า</span>
-                  </div>
-                </div>
-              )}
-
-              {/* Assignment Checklist: Select which assignments to include */}
-              <div className="space-y-2 pt-2 border-t border-slate-700/80">
+              {/* Assignment Selector for this formative section */}
+              <div className="space-y-2 pt-2 border-t border-slate-700">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-slate-300">
-                    เลือกช่องคะแนนเก็บที่จะดึงมารวม ({selectedAssignments.length}/{assignments.length} ช่อง):
+                    เลือกงานในสมุดคะแนนเก็บที่ดึงมาคำนวณในหมวดนี้:
                   </span>
                   <div className="flex items-center gap-2 text-xs">
                     <button
                       type="button"
-                      onClick={() => handleSelectAllAssignments(true)}
+                      onClick={() => setFormativeFormSelectedAsgs(assignments.map((a) => a.id))}
                       className="text-indigo-400 hover:underline"
                     >
                       เลือกทั้งหมด
@@ -1014,7 +1295,7 @@ export const FinalGradingView = ({
                     <span className="text-slate-600">•</span>
                     <button
                       type="button"
-                      onClick={() => handleSelectAllAssignments(false)}
+                      onClick={() => setFormativeFormSelectedAsgs([])}
                       className="text-slate-400 hover:underline"
                     >
                       ยกเลิกทั้งหมด
@@ -1025,11 +1306,11 @@ export const FinalGradingView = ({
                 <div className="max-h-48 overflow-y-auto space-y-1.5 pr-1 scrollbar-thin scrollbar-thumb-slate-700">
                   {assignments.length === 0 ? (
                     <div className="p-3 text-center text-xs text-slate-400">
-                      ยังไม่มีช่องคะแนนเก็บในวิชานี้ (ไปเพิ่มที่หน้า "สมุดบันทึกคะแนนเก็บ")
+                      ยังไม่มีงานในสมุดคะแนนเก็บ (สามารถกรอกคะแนนหมวดนี้เองในตารางได้)
                     </div>
                   ) : (
                     assignments.map((a) => {
-                      const isChecked = selectedAssignmentIds.includes(a.id);
+                      const isChecked = formativeFormSelectedAsgs.includes(a.id);
                       return (
                         <label
                           key={a.id}
@@ -1043,11 +1324,16 @@ export const FinalGradingView = ({
                             <input
                               type="checkbox"
                               checked={isChecked}
-                              onChange={() => handleToggleAssignment(a.id)}
+                              onChange={() => {
+                                if (isChecked) {
+                                  setFormativeFormSelectedAsgs(formativeFormSelectedAsgs.filter((id) => id !== a.id));
+                                } else {
+                                  setFormativeFormSelectedAsgs([...formativeFormSelectedAsgs, a.id]);
+                                }
+                              }}
                               className="w-4 h-4 rounded text-indigo-600 bg-slate-900 border-slate-600 focus:ring-indigo-500"
                             />
                             <span className="font-semibold truncate">{a.title}</span>
-                            <span className="text-[10px] text-slate-500">({a.category || 'งาน'})</span>
                           </div>
                           <span className="font-mono font-bold text-amber-400 shrink-0 ml-2">
                             เต็ม {a.maxScore} แต้ม
@@ -1057,97 +1343,39 @@ export const FinalGradingView = ({
                     })
                   )}
                 </div>
+                <p className="text-[11px] text-slate-400">
+                  * หากไม่เลือกงานใดเลย จะสามารถกรอกคะแนนของหมวดนี้ในตารางตัดเกรดได้โดยตรง
+                </p>
               </div>
-            </div>
 
-            {/* Section B: Exam Columns Management */}
-            <div className="bg-slate-800/80 p-5 rounded-2xl border border-slate-700 space-y-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h4 className="text-sm font-bold text-white flex items-center gap-2">
-                    <Award className="w-4 h-4 text-amber-400" />
-                    <span>2. ช่องคะแนนสอบ (Summative Exam Columns)</span>
-                  </h4>
-                  <p className="text-xs text-slate-400">
-                    รวมคะแนนสอบทั้งหมด: <strong className="text-amber-300 font-mono">{totalExamMaxScore}</strong> แต้ม
-                  </p>
-                </div>
-
+              <div className="pt-3 flex items-center justify-end gap-2.5 border-t border-slate-700">
                 <button
                   type="button"
-                  onClick={() => handleOpenExamModal()}
-                  className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow"
+                  onClick={() => setShowAddFormativeModal(false)}
+                  className="px-4 py-2 rounded-xl bg-slate-750 hover:bg-slate-700 text-slate-300 text-xs font-bold"
                 >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>เพิ่มช่องสอบ</span>
+                  ยกเลิก
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-pink-600 hover:opacity-95 text-white text-xs font-bold shadow flex items-center gap-1.5"
+                >
+                  <Check className="w-4 h-4" />
+                  <span>{editingFormativeId ? 'บันทึกหมวดคะแนน' : 'สร้างหมวดคะแนน'}</span>
                 </button>
               </div>
-
-              <div className="space-y-2">
-                {examColumns.length === 0 ? (
-                  <div className="p-3 text-center text-xs text-slate-400 bg-slate-900/60 rounded-xl border border-slate-700">
-                    ยังไม่มีช่องคะแนนสอบ (กดปุ่ม "+ เพิ่มช่องสอบ" เพื่อเพิ่มสอบกลางภาค หรือปลายภาค)
-                  </div>
-                ) : (
-                  examColumns.map((col) => (
-                    <div
-                      key={col.id}
-                      className="p-3 rounded-xl bg-slate-900 border border-slate-700 flex items-center justify-between gap-3 text-xs"
-                    >
-                      <div className="flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full bg-amber-400"></span>
-                        <span className="font-bold text-white">{col.title}</span>
-                        <span className="text-[10px] text-slate-400">({col.category || 'สอบ'})</span>
-                      </div>
-
-                      <div className="flex items-center gap-3">
-                        <span className="font-mono font-black text-amber-300">
-                          {col.maxScore} คะแนน
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => handleOpenExamModal(col)}
-                          className="p-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors"
-                          title="แก้ไขช่องสอบ"
-                        >
-                          <Edit3 className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteExamColumn(col.id)}
-                          className="p-1 rounded-lg bg-slate-800 hover:bg-rose-900/50 text-slate-400 hover:text-rose-300 transition-colors"
-                          title="ลบช่องสอบ"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-
-            {/* Modal Footer */}
-            <div className="pt-3 border-t border-slate-700 flex items-center justify-end gap-3">
-              <button
-                type="button"
-                onClick={() => setShowConfigModal(false)}
-                className="px-6 py-2.5 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-lg shadow-indigo-600/30 transition-transform active:scale-95"
-              >
-                บันทึกและปิดหน้าต่าง
-              </button>
-            </div>
+            </form>
           </div>
         </div>
       )}
 
-      {/* ========================================================= */}
-      {/* ➕ MODAL 2: เพิ่ม / แก้ไขช่องคะแนนสอบ (Exam Column Modal)  */}
-      {/* ========================================================= */}
+      {/* ================================================================================= */}
+      {/* ➕ MODAL 3: เพิ่ม / แก้ไขช่องคะแนนสอบ (Exam Column Modal)                           */}
+      {/* ================================================================================= */}
       {showAddExamModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fade-in">
-          <div className="bg-slate-850 w-full max-w-md rounded-3xl border-2 border-slate-700 shadow-2xl p-6 space-y-5">
-            <div className="flex items-center justify-between border-b border-slate-700 pb-3">
+        <div className="fixed inset-0 z-50 overflow-hidden bg-slate-950/85 backdrop-blur-md p-3 sm:p-5 flex items-center justify-center animate-fade-in">
+          <div className="bg-slate-850 w-full max-w-md max-h-[90vh] rounded-3xl border-2 border-slate-700 shadow-2xl flex flex-col overflow-hidden">
+            <div className="p-4 sm:p-5 border-b border-slate-700 flex items-center justify-between shrink-0 bg-slate-850">
               <h3 className="text-base font-black text-white flex items-center gap-2">
                 <Award className="w-5 h-5 text-amber-400" />
                 <span>{editingExamId ? 'แก้ไขช่องคะแนนสอบ' : 'เพิ่มช่องคะแนนสอบใหม่'}</span>
@@ -1161,7 +1389,7 @@ export const FinalGradingView = ({
               </button>
             </div>
 
-            <form onSubmit={handleSubmitExamColumn} className="space-y-4">
+            <form onSubmit={handleSubmitExamColumn} className="p-4 sm:p-5 space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-300 mb-1">
                   ชื่อช่องคะแนนสอบ <span className="text-rose-400">*</span>
@@ -1169,7 +1397,7 @@ export const FinalGradingView = ({
                 <input
                   type="text"
                   required
-                  placeholder="เช่น สอบกลางภาค, สอบปลายภาค, สอบปฏิบัติ..."
+                  placeholder="เช่น สอบปลายภาค, สอบกลางภาค, สอบปฏิบัติ..."
                   value={examFormTitle}
                   onChange={(e) => setExamFormTitle(e.target.value)}
                   className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-600 text-sm text-white outline-none focus:border-indigo-400"
@@ -1186,8 +1414,8 @@ export const FinalGradingView = ({
                     onChange={(e) => setExamFormCategory(e.target.value)}
                     className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-600 text-xs text-white outline-none focus:border-indigo-400"
                   >
-                    <option value="สอบกลางภาค">สอบกลางภาค</option>
                     <option value="สอบปลายภาค">สอบปลายภาค</option>
+                    <option value="สอบกลางภาค">สอบกลางภาค</option>
                     <option value="สอบย่อย">สอบย่อย</option>
                     <option value="สอบปฏิบัติ">สอบปฏิบัติ</option>
                     <option value="วัดผลสัมฤทธิ์">วัดผลสัมฤทธิ์</option>
@@ -1207,26 +1435,25 @@ export const FinalGradingView = ({
                     value={examFormMaxScore}
                     onChange={(e) => setExamFormMaxScore(e.target.value)}
                     className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-600 text-sm font-mono font-bold text-amber-300 text-center outline-none focus:border-indigo-400"
-                    title="เลื่อนลูกกลิ้งเมาส์เพื่อปรับคะแนนเต็ม"
                   />
                 </div>
               </div>
 
               <div className="p-3 rounded-xl bg-indigo-950/60 border border-indigo-700/50 text-[11px] text-indigo-200">
-                💡 <strong>เคล็ดลับ:</strong> คุณครูสามารถปรับคะแนนสอบให้นักเรียนแต่ละคนในตารางได้สะดวก โดยใช้ลูกกลิ้งเมาส์ (Scroll) หรือพิมพ์ตัวเลข
+                💡 <strong>เคล็ดลับ:</strong> คุณครูสามารถกรอกหรือเลื่อนลูกกลิ้งเมาส์ปรับคะแนนสอบให้นักเรียนในตารางได้สะดวก
               </div>
 
               <div className="pt-2 flex items-center justify-end gap-2.5 border-t border-slate-700">
                 <button
                   type="button"
                   onClick={() => setShowAddExamModal(false)}
-                  className="px-4 py-2 rounded-xl bg-slate-750 hover:bg-slate-700 text-slate-300 text-xs font-bold transition-colors"
+                  className="px-4 py-2 rounded-xl bg-slate-750 hover:bg-slate-700 text-slate-300 text-xs font-bold"
                 >
                   ยกเลิก
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:opacity-95 text-slate-950 text-xs font-black shadow-lg shadow-amber-500/20 flex items-center gap-1.5 transition-all active:scale-95"
+                  className="px-5 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:opacity-95 text-slate-950 text-xs font-black shadow-lg shadow-amber-500/20 flex items-center gap-1.5"
                 >
                   <Check className="w-4 h-4" />
                   <span>{editingExamId ? 'บันทึกการแก้ไข' : 'สร้างช่องสอบ'}</span>
