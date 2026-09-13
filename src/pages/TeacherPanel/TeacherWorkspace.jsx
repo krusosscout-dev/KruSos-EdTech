@@ -493,7 +493,11 @@ export const TeacherWorkspace = ({
              ======================================================== */}
           {activeMenu === 'grading' && activeSubject && (
             <div className="space-y-4">
-              <FinalGradingView subject={activeSubject} />
+              <FinalGradingView
+                subject={activeSubject}
+                onSaveSubject={onSaveSubject}
+                onUpdateScore={handleUpdateScore}
+              />
             </div>
           )}
 

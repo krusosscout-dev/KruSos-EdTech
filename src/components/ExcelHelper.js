@@ -99,7 +99,91 @@ export const exportComprehensiveExcel = (subject) => {
   // Total possible max score
   const totalMaxScore = assignments.reduce((acc, a) => acc + (parseFloat(a.maxScore) || 0), 0);
 
-  // Sheet 1: สมุดคะแนนเก็บ (Gradebook)
+  // 1. Official 100-Point Final Grading Sheet (สรุปผลตัดเกรด 100 คะแนน)
+  const gradingConfig = subject.gradingConfig || {
+    formativeWeight: 70,
+    calculationMode: 'scale_to_weight',
+    divisor: 1,
+    selectedAssignmentIds: assignments.map((a) => a.id),
+    examColumns: [
+      { id: 'exam_midterm', title: 'สอบกลางภาค', maxScore: 10 },
+      { id: 'exam_final', title: 'สอบปลายภาค', maxScore: 20 }
+    ]
+  };
+
+  const selectedAssignments = assignments.filter((a) =>
+    (gradingConfig.selectedAssignmentIds || []).includes(a.id)
+  );
+  const selectedRawMax = selectedAssignments.reduce((acc, a) => acc + (parseFloat(a.maxScore) || 0), 0);
+  const examCols = gradingConfig.examColumns || [];
+
+  let effectiveFormativeMax = 70;
+  if (gradingConfig.calculationMode === 'scale_to_weight') {
+    effectiveFormativeMax = parseFloat(gradingConfig.formativeWeight) || 70;
+  } else if (gradingConfig.calculationMode === 'divide_by') {
+    const d = parseFloat(gradingConfig.divisor) || 1;
+    effectiveFormativeMax = d > 0 ? selectedRawMax / d : selectedRawMax;
+  } else {
+    effectiveFormativeMax = selectedRawMax;
+  }
+
+  const totalExamMax = examCols.reduce((acc, col) => acc + (parseFloat(col.maxScore) || 0), 0);
+  const grandMax100 = Math.round((effectiveFormativeMax + totalExamMax) * 10) / 10;
+
+  const finalGradingRows = students.map((std) => {
+    let rawFormative = 0;
+    selectedAssignments.forEach((a) => {
+      const s = scores[std.id]?.[a.id];
+      if (s !== undefined && s !== '') rawFormative += parseFloat(s) || 0;
+    });
+
+    let calcFormative = 0;
+    if (gradingConfig.calculationMode === 'scale_to_weight') {
+      calcFormative = selectedRawMax > 0 ? (rawFormative / selectedRawMax) * effectiveFormativeMax : 0;
+    } else if (gradingConfig.calculationMode === 'divide_by') {
+      const d = parseFloat(gradingConfig.divisor) || 1;
+      calcFormative = d > 0 ? rawFormative / d : rawFormative;
+    } else {
+      calcFormative = rawFormative;
+    }
+    calcFormative = Math.round(calcFormative * 10) / 10;
+
+    const row = {
+      'เลขที่': std.studentNumber,
+      'รหัสนักเรียน': std.studentCode || '-',
+      'ชื่อ-นามสกุล': `${std.title || ''}${std.name}`,
+      [`คะแนนเก็บ (${effectiveFormativeMax} แต้ม)`]: calcFormative
+    };
+
+    let examSum = 0;
+    examCols.forEach((col) => {
+      const s = scores[std.id]?.[col.id];
+      const val = s !== undefined && s !== '' ? parseFloat(s) : 0;
+      examSum += val;
+      row[`${col.title} (${col.maxScore} แต้ม)`] = s !== undefined && s !== '' ? val : 0;
+    });
+
+    const netScore = Math.round((calcFormative + examSum) * 10) / 10;
+    const grade = calculateGrade(netScore, grandMax100 > 0 ? grandMax100 : 100);
+
+    row[`คะแนนรวมสุทธิ (เต็ม ${grandMax100})`] = netScore;
+    row['ระดับเกรด (0-4)'] = grade;
+
+    let evalText = 'ผ่าน (ดีเยี่ยม)';
+    if (grade === '4' || grade === '3.5') evalText = 'ผ่าน (ดีเยี่ยม)';
+    else if (grade === '3' || grade === '2.5') evalText = 'ผ่าน (ดี)';
+    else if (grade === '2' || grade === '1.5') evalText = 'ผ่าน (ปานกลาง)';
+    else if (grade === '1') evalText = 'ผ่าน (เกณฑ์ขั้นต่ำ)';
+    else evalText = 'ไม่ผ่านเกณฑ์';
+    row['ผลการประเมิน'] = evalText;
+
+    return row;
+  });
+
+  const wsFinal = XLSX.utils.json_to_sheet(finalGradingRows);
+  XLSX.utils.book_append_sheet(wb, wsFinal, 'สรุปผลตัดเกรด 100 คะแนน');
+
+  // Sheet 2: สมุดคะแนนเก็บ (Gradebook)
   const gradebookRows = students.map((std) => {
     let rowTotal = 0;
     const row = {
