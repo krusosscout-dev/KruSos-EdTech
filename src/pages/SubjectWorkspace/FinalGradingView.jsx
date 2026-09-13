@@ -168,11 +168,12 @@ export const FinalGradingView = ({
   const handleAutoBalance100 = () => {
     const diff = 100 - totalCalculatedMax;
     if (formativeSections.length > 0) {
-      // Adjust the last formative section
       const updated = [...formativeSections];
-      const last = updated[updated.length - 1];
-      const newWeight = Math.max(1, (parseFloat(last.weight) || 0) + diff);
-      updated[updated.length - 1] = { ...last, weight: newWeight };
+      // Target the first section (e.g. 20 -> 30 so 30 + 20 + 20 = 70, + 30 = 100)
+      const targetIdx = 0;
+      const target = updated[targetIdx];
+      const newWeight = Math.max(1, (parseFloat(target.weight) || 0) + diff);
+      updated[targetIdx] = { ...target, weight: newWeight };
       handleSaveConfig({
         ...config,
         formativeSections: updated
@@ -753,13 +754,11 @@ export const FinalGradingView = ({
             <thead>
               <tr className="bg-slate-900 text-slate-200 border-b-2 border-slate-700 font-bold uppercase text-xs">
                 {/* Pinned Left: Number */}
-                <th className="p-3.5 w-16 text-center sticky left-0 z-20 bg-slate-900 border-r border-slate-800 shadow-[2px_0_6px_rgba(0,0,0,0.3)]">
+                <th className="p-3.5 w-14 min-w-[56px] max-w-[56px] text-center sticky left-0 z-20 bg-slate-900 border-r border-slate-800 shadow-[2px_0_6px_rgba(0,0,0,0.3)]">
                   เลขที่
                 </th>
-                {/* Student Code */}
-                <th className="p-3.5 w-24 text-center">รหัส</th>
-                {/* Pinned Left: Name */}
-                <th className="p-3.5 min-w-[190px] sticky left-16 z-20 bg-slate-900 border-r-2 border-slate-700 shadow-[4px_0_10px_rgba(0,0,0,0.35)]">
+                {/* Pinned Left: Name & Student Code */}
+                <th className="p-3.5 min-w-[190px] max-w-[220px] sticky left-14 z-20 bg-slate-900 border-r-2 border-slate-700 shadow-[4px_0_10px_rgba(0,0,0,0.35)]">
                   ชื่อ - นามสกุล
                 </th>
 
@@ -767,23 +766,27 @@ export const FinalGradingView = ({
                 {formativeSections.map((sec, sIdx) => (
                   <th
                     key={sec.id}
-                    className="p-3 text-center min-w-[130px] max-w-[170px] bg-indigo-950/70 text-indigo-200 border-r border-slate-800 relative group"
+                    className="p-3 text-center min-w-[150px] bg-indigo-950/70 text-indigo-200 border-r border-slate-800 relative group"
                   >
-                    <div className="flex items-center justify-center gap-1 font-bold text-amber-300 truncate">
-                      <span>{sec.title}</span>
+                    <div className="flex items-center justify-center gap-1.5 px-1">
+                      <span className="font-bold text-amber-300 text-xs leading-snug break-words whitespace-normal" title={sec.title}>
+                        {sec.title}
+                      </span>
                       <button
                         type="button"
                         onClick={() => handleOpenFormativeModal(sec)}
-                        className="p-0.5 text-slate-400 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                        className="p-1 rounded-md bg-indigo-800/80 hover:bg-indigo-600 text-indigo-200 hover:text-white shrink-0 opacity-80 group-hover:opacity-100 transition-opacity"
                         title="แก้ไขหมวดคะแนนเก็บนี้"
                       >
                         <Edit3 className="w-3 h-3" />
                       </button>
                     </div>
-                    <div className="text-[10px] text-slate-400 font-mono font-normal mt-0.5">
-                      เต็ม {sec.weight} แต้ม
+                    <div className="text-[11px] text-slate-300 font-mono font-normal mt-1 flex items-center justify-center gap-1 flex-wrap">
+                      <span className="px-1.5 py-0.5 rounded bg-indigo-900/80 text-amber-300 font-bold">
+                        เต็ม {sec.weight} แต้ม
+                      </span>
                       {sec.selectedAssignmentIds?.length > 0 && (
-                        <span className="text-indigo-400 ml-1">
+                        <span className="text-indigo-300 text-[10px]">
                           (ดึง {sec.selectedAssignmentIds.length} ช่อง)
                         </span>
                       )}
@@ -795,15 +798,17 @@ export const FinalGradingView = ({
                 {examColumns.map((col) => (
                   <th
                     key={col.id}
-                    className="p-3 text-center min-w-[130px] max-w-[160px] bg-slate-900/90 border-r border-slate-800 relative group"
+                    className="p-3 text-center min-w-[140px] bg-slate-900/90 border-r border-slate-800 relative group"
                   >
-                    <div className="flex items-center justify-center gap-1 font-bold text-amber-300 truncate">
-                      <span>{col.title}</span>
-                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="flex items-center justify-center gap-1.5 px-1">
+                      <span className="font-bold text-amber-300 text-xs leading-snug break-words whitespace-normal" title={col.title}>
+                        {col.title}
+                      </span>
+                      <div className="flex items-center gap-1 shrink-0 opacity-80 group-hover:opacity-100 transition-opacity">
                         <button
                           type="button"
                           onClick={() => handleOpenExamModal(col)}
-                          className="p-0.5 text-slate-400 hover:text-white"
+                          className="p-1 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white"
                           title="แก้ไขชื่อ/คะแนนเต็ม"
                         >
                           <Edit3 className="w-3 h-3" />
@@ -811,20 +816,22 @@ export const FinalGradingView = ({
                         <button
                           type="button"
                           onClick={() => handleDeleteExamColumn(col.id)}
-                          className="p-0.5 text-slate-400 hover:text-rose-400"
+                          className="p-1 rounded-md bg-rose-950/60 hover:bg-rose-900 text-rose-300 hover:text-white"
                           title="ลบช่องสอบนี้"
                         >
                           <Trash2 className="w-3 h-3" />
                         </button>
                       </div>
                     </div>
-                    <div className="text-[10px] text-slate-400 font-mono font-normal mt-0.5 flex items-center justify-center gap-1">
-                      <span>เต็ม {col.maxScore} แต้ม</span>
+                    <div className="text-[11px] text-slate-300 font-mono font-normal mt-1 flex items-center justify-center gap-1 flex-wrap">
+                      <span className="px-1.5 py-0.5 rounded bg-amber-950/80 text-amber-300 font-bold">
+                        เต็ม {col.maxScore} แต้ม
+                      </span>
                       <button
                         type="button"
                         onClick={() => handleQuickFill(col.id, col.maxScore, col.title)}
-                        className="text-[9px] text-indigo-400 hover:underline font-sans ml-1"
-                        title="กรอกเต็มทุกคน"
+                        className="text-[10px] text-indigo-400 hover:text-indigo-300 hover:underline font-sans ml-1"
+                        title="กรอกคะแนนเต็มให้ทุกคนทันที"
                       >
                         (เต็มทุกคน)
                       </button>
@@ -833,11 +840,28 @@ export const FinalGradingView = ({
                 ))}
 
                 {/* Net Total (100 Points) */}
-                <th className="p-3.5 text-center min-w-[120px] bg-slate-950 text-amber-300 font-black border-r border-slate-800">
+                <th className="p-3 text-center min-w-[130px] bg-slate-950 text-amber-300 font-black border-r border-slate-800">
                   <div>รวมคะแนน</div>
-                  <div className="text-[10px] text-slate-400 font-mono font-normal mt-0.5">
-                    (เต็ม {totalCalculatedMax})
-                  </div>
+                  {isExact100 ? (
+                    <div className="text-[11px] text-emerald-400 font-mono font-bold mt-0.5">
+                      (เต็ม 100 แต้มเป๊ะ)
+                    </div>
+                  ) : (
+                    <div className="mt-1 flex flex-col items-center gap-1">
+                      <span className="text-[10px] text-rose-400 font-mono font-bold animate-pulse">
+                        เต็ม {totalCalculatedMax} ({totalCalculatedMax < 100 ? `ขาด ${Math.round((100 - totalCalculatedMax) * 10) / 10}` : `เกิน ${Math.round((totalCalculatedMax - 100) * 10) / 10}`} แต้ม)
+                      </span>
+                      <button
+                        type="button"
+                        onClick={handleAutoBalance100}
+                        className="px-2 py-0.5 rounded-full bg-amber-500 hover:bg-amber-400 text-slate-950 text-[10px] font-black shadow transition-all active:scale-95 flex items-center gap-1"
+                        title="คลิกเพื่อปรับสัดส่วนคะแนนให้รวมได้ 100 คะแนนทันที"
+                      >
+                        <Sparkles className="w-3 h-3" />
+                        <span>ปรับเป็น 100 ทันที</span>
+                      </button>
+                    </div>
+                  )}
                 </th>
 
                 {/* Grade */}
@@ -851,7 +875,7 @@ export const FinalGradingView = ({
             <tbody className="divide-y divide-slate-700/60 font-sans">
               {filteredResults.length === 0 ? (
                 <tr>
-                  <td colSpan={5 + formativeSections.length + examColumns.length} className="p-8 text-center text-slate-400">
+                  <td colSpan={4 + formativeSections.length + examColumns.length} className="p-8 text-center text-slate-400">
                     ไม่พบข้อมูลนักเรียนที่ตรงกับเงื่อนไขการค้นหา
                   </td>
                 </tr>
@@ -867,15 +891,13 @@ export const FinalGradingView = ({
                         {std.studentNumber}
                       </td>
 
-                      {/* Student Code */}
-                      <td className="p-3.5 text-center font-mono text-xs text-slate-400">
-                        {std.studentCode || '-'}
-                      </td>
-
-                      {/* Pinned Left: Student Name */}
-                      <td className="p-3.5 font-bold text-base text-white sticky left-16 z-10 bg-slate-800 group-hover:bg-slate-750 border-r-2 border-slate-700 shadow-[4px_0_10px_rgba(0,0,0,0.35)]">
-                        <div className="truncate">
+                      {/* Pinned Left: Student Name & Code */}
+                      <td className="p-3.5 sticky left-14 z-10 bg-slate-800 group-hover:bg-slate-750 border-r-2 border-slate-700 shadow-[4px_0_10px_rgba(0,0,0,0.35)] min-w-[190px] max-w-[220px]">
+                        <div className="font-bold text-sm sm:text-base text-white truncate">
                           {std.title || ''}{std.name}
+                        </div>
+                        <div className="text-[11px] text-slate-400 font-mono mt-0.5">
+                          รหัส: {std.studentCode || '-'}
                         </div>
                       </td>
 
